@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use lazy_static::lazy_static;
-use regex::{Captures, Regex};
+use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
@@ -76,6 +76,37 @@ impl UserSession {
             self.session = s.get(2).unwrap().as_str().to_string();
         }
     }
+
+    // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留
+    pub fn update(&mut self, header_map: &HeaderMap) {
+        let all_headers = header_map.get_all("set-cookie");
+        for header in all_headers {
+            let str = header.to_str();
+            // early return to save regexp match time
+            if str.is_err() {
+                continue;
+            }
+            // it is safe to unwrap now
+            let str = str.unwrap();
+            if let Some(xsrf) = REG_XSRF.captures(str) {
+                // 如果正则解析出了新的值，则更新值，否则把原来的值放进去。
+                // 因为字符串拷贝是个开销很大的操作，所以这里先拿了一个原值的引用
+                // 然后用 map_or_else 来懒惰执行。用 closure 之后只有在遇到 None 的时候，
+                // old_token.clone() 才会被执行，于是我们当遇到 Some 的时候我们可以减少
+                // 一次字符串拷贝的开销。
+                let old_token = &self.token;
+                self.token = xsrf
+                    .get(1)
+                    .map_or_else(|| old_token.clone(), |v| v.as_str().to_string());
+            } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
+                // same as above
+                let old_session = &self.session;
+                self.session = cookie_match
+                    .get(1)
+                    .map_or_else(|| old_session.clone(), |v| v.as_str().to_string())
+            }
+        }
+    }
 }
 
 /// 封装的get请求方法
@@ -87,7 +118,7 @@ async fn response_for_get(url: &str, headers: HeaderMap) -> Result<Response, Box
 async fn response_for_post(
     url: &str,
     headers: HeaderMap,
-    body: HashMap<String, String>,
+    body: HashMap<String, &String>,
 ) -> Result<Response, Box<dyn Error>> {
     let p = CLIENT.post(url).headers(headers).form(&body).send().await?;
     Ok(p)
@@ -115,37 +146,6 @@ fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
         reqwest::header::HeaderValue::from_static("application/x-www-form-urlencoded"),
     );
     header
-}
-/// 封装的cookie解析
-/// 自动更新session
-fn get_new_cookie(header: &HeaderMap, user: &mut UserSession) -> (Option<String>, Option<String>) {
-    let mut token: Option<String> = None;
-    let mut cookie: Option<String> = None;
-    let mut str;
-    let all = header.get_all("set-cookie");
-    for val in all {
-        str = val.to_str().unwrap_or("");
-        if let Some(xsrf) = REG_XSRF.captures(str) {
-            if token.eq(&None) {
-                token = Some(get_regex_one(xsrf));
-                user.token = token.as_ref().unwrap().clone();
-            }
-        } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
-            if cookie.eq(&None) {
-                cookie = Some(get_regex_one(cookie_match));
-                user.session = cookie.as_ref().unwrap().clone();
-            }
-        }
-        if !token.eq(&None) && !cookie.eq(&None) {
-            return (token, cookie);
-        }
-    }
-
-    (token, cookie)
-}
-/// 正则提取
-fn get_regex_one(cap: Captures) -> String {
-    cap.get(1).map_or("", |m| m.as_str()).to_string()
 }
 
 #[test]
@@ -184,7 +184,7 @@ async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
 
     match response.status() {
         StatusCode::OK => {
-            get_new_cookie(response.headers(), user);
+            user.update(response.headers());
             Ok(())
         }
         StatusCode::BAD_REQUEST => Err(OsuMapDownloadError::new("连接失败,检查网络")),
@@ -207,15 +207,15 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
     );
 
     let mut body = HashMap::new();
-    body.insert("_token".to_string(), user.token.clone());
-    body.insert("username".to_string(), user.name.clone());
-    body.insert("password".to_string(), user.password.to_string());
+    body.insert("_token".to_string(), &user.token);
+    body.insert("username".to_string(), &user.name);
+    body.insert("password".to_string(), &user.password);
 
     let response = response_for_post(LOGIN_URL, header, body).await.unwrap();
 
     match response.status() {
         StatusCode::OK => {
-            get_new_cookie(response.headers(), user);
+            user.update(response.headers());
             //pring_xxx(&f);
             Ok(())
         }
@@ -232,7 +232,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     let header = get_download_header(&id_str, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }
@@ -240,7 +240,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     do_home(user).await?;
     let header = get_download_header(&id_str, user);
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }
@@ -248,7 +248,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     do_login(user).await?;
     let header = get_download_header(&id_str, user);
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }

@@ -169,7 +169,7 @@ fn test_print_xxx() {
 
 /// 生成请求用到的cookie字符串
 fn format_cookie_str(xsrf: &str, cookie: &str) -> String {
-    format!("XSRF-TOKEN={}; osu_session={};", xsrf, cookie).to_string()
+    format!("XSRF-TOKEN={}; osu_session={};", xsrf, cookie)
 }
 /// 请求主页,用于得到及session记录
 async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {

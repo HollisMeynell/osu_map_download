@@ -1,14 +1,17 @@
 use anyhow::{Context, Result};
-use bytes::Bytes;
+use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
 };
-use std::collections::HashMap;
 use std::string::String;
+use std::{collections::HashMap, path::Path};
 use thiserror::Error;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
 static HOME_PAGE_URL: &str = "https://osu.ppy.sh/home";
 static LOGIN_URL: &str = "https://osu.ppy.sh/session";
@@ -135,7 +138,7 @@ async fn response_for_post(
 async fn response_for_download(url: &str, headers: HeaderMap) -> Result<Response> {
     let response = CLIENT.get(url).headers(headers).send().await?;
     if response.status() == StatusCode::NOT_FOUND {
-        return Err(OsuMapDownloadError::NotFoundMap.into())
+        return Err(OsuMapDownloadError::NotFoundMap.into());
     }
     Ok(response)
 }
@@ -143,15 +146,13 @@ async fn response_for_download(url: &str, headers: HeaderMap) -> Result<Response
 /// 封装的请求头构造
 fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
     let mut header = HeaderMap::new();
-    let cookie_key = COOKIE;
     header.insert(
-        cookie_key,
+        COOKIE,
         format_cookie_str(&user.token, &user.session)
             .parse()
             .unwrap(),
     );
-    let mut back_url = "https://osu.ppy.sh/beatmapsets/".to_string();
-    back_url.push_str(id_str);
+    let back_url = format!("https://osu.ppy.sh/beatmapsets/{id_str}");
     header.insert("referer", back_url.parse().unwrap());
     header.insert(
         CONTENT_TYPE,
@@ -238,35 +239,62 @@ async fn do_login(user: &mut UserSession) -> Result<()> {
         _ => Err(OsuMapDownloadError::Unknown.into()),
     }
 }
-/// 下载方法,使用UserSession信息下载
+
+/// 下载方法,使用 UserSession 信息下载
 /// 如果短时间大量下载,尽可能使用不同的user下载
 /// 使用Tokio以及reqwest依赖,确保版本匹配
-pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes> {
+pub async fn download(sid: u64, user: &mut UserSession, file_path: &Path) -> Result<()> {
     let url = new_download_set_url(sid);
     let sid = sid.to_string();
     let header = get_download_header(&sid, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        let p: Bytes = data.bytes().await?;
-        return Ok(p);
+        return download_file(data, file_path, &sid).await;
     }
     // session 可能超时失效 ,进行刷新
     do_home(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        let p: Bytes = data.bytes().await?;
-        return Ok(p);
+        return download_file(data, file_path, &sid).await;
     }
     // 重新登录
     do_login(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        let p: Bytes = data.bytes().await?;
-        return Ok(p);
+        return download_file(data, file_path, &sid).await;
     }
     // 登录失败抛出错误
     Err(OsuMapDownloadError::LoginFail.into())
+}
+
+async fn download_file(resp: Response, write_to: &Path, sid: &str) -> Result<()> {
+    let total_size = resp
+        .content_length()
+        .ok_or_else(|| anyhow::anyhow!("无法获取文件大小"))?;
+
+    let filename = write_to.file_name().unwrap().to_str().unwrap();
+    let bar = ProgressBar::new(total_size);
+    bar.set_style(ProgressStyle::default_bar()
+                  .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+                  .progress_chars("#>-"));
+    bar.set_message(format!("正在下载谱面 {sid}"));
+    let mut file = File::create(write_to).await?;
+    let mut downloaded = 0;
+    let mut resp_stream = resp.bytes_stream();
+
+    while let Some(chunk) = resp_stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk)
+            .await
+            .with_context(|| "下载文件时出现错误")?;
+        let new = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
+        downloaded = new;
+        bar.set_position(new);
+    }
+
+    bar.finish_with_message(format!("谱面下载完成，保存到: {filename}"));
+    Ok(())
 }

@@ -30,6 +30,8 @@ lazy_static! {
 pub enum OsuMapDownloadError {
     #[error("验证失败,检查是否密码错误")]
     IncorrectPassword,
+    #[error("没有找到该谱面,或者已经下架或被删除,无法下载")]
+    NotFoundMap,
     #[error("登录失败")]
     LoginFail,
     #[error("连接失败，检查网络")]
@@ -131,7 +133,11 @@ async fn response_for_post(
 
 /// 封装的下载请求
 async fn response_for_download(url: &str, headers: HeaderMap) -> Result<Response> {
-    Ok(CLIENT.get(url).headers(headers).send().await?)
+    let response = CLIENT.get(url).headers(headers).send().await?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(OsuMapDownloadError::NotFoundMap.into())
+    }
+    Ok(response)
 }
 
 /// 封装的请求头构造

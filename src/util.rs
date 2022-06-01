@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use lazy_static::lazy_static;
-use regex::{Captures, Regex};
+use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
@@ -76,6 +76,33 @@ impl UserSession {
             self.session = s.get(2).unwrap().as_str().to_string();
         }
     }
+
+    // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留
+    pub fn update(&mut self, header_map: &HeaderMap) {
+        let all_headers = header_map.get_all("set-cookie");
+        for header in all_headers {
+            let str = header.to_str();
+            // early return to save regexp match time
+            if str.is_err() {
+                continue;
+            }
+            // it is safe to unwrap now
+            let str = str.unwrap();
+            if let Some(xsrf) = REG_XSRF.captures(str) {
+                // If returning None, using old token, if returning Some, update value
+                let old_token = self.token.clone();
+                self.token = xsrf
+                    .get(1)
+                    .map_or_else(|| old_token, |v| v.as_str().to_string());
+            } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
+                // same as above
+                let old_session = self.session.clone();
+                self.session = cookie_match
+                    .get(1)
+                    .map_or_else(|| old_session, |v| v.as_str().to_string())
+            }
+        }
+    }
 }
 
 /// 封装的get请求方法
@@ -116,37 +143,6 @@ fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
     );
     header
 }
-/// 封装的cookie解析
-/// 自动更新session
-fn get_new_cookie(header: &HeaderMap, user: &mut UserSession) -> (Option<String>, Option<String>) {
-    let mut token: Option<String> = None;
-    let mut cookie: Option<String> = None;
-    let mut str;
-    let all = header.get_all("set-cookie");
-    for val in all {
-        str = val.to_str().unwrap_or("");
-        if let Some(xsrf) = REG_XSRF.captures(str) {
-            if token.is_none() {
-                token = Some(get_regex_one(xsrf));
-                user.token = token.as_ref().unwrap().clone();
-            }
-        } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
-            if cookie.is_none() {
-                cookie = Some(get_regex_one(cookie_match));
-                user.session = cookie.as_ref().unwrap().clone();
-            }
-        }
-        if token.is_some() && cookie.is_some() {
-            return (token, cookie);
-        }
-    }
-
-    (token, cookie)
-}
-/// 正则提取
-fn get_regex_one(cap: Captures) -> String {
-    cap.get(1).map_or("", |m| m.as_str()).to_string()
-}
 
 #[test]
 fn test_print_xxx() {
@@ -184,7 +180,7 @@ async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
 
     match response.status() {
         StatusCode::OK => {
-            get_new_cookie(response.headers(), user);
+            user.update(response.headers());
             Ok(())
         }
         StatusCode::BAD_REQUEST => Err(OsuMapDownloadError::new("连接失败,检查网络")),
@@ -215,7 +211,7 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
 
     match response.status() {
         StatusCode::OK => {
-            get_new_cookie(response.headers(), user);
+            user.update(response.headers());
             //pring_xxx(&f);
             Ok(())
         }

@@ -73,8 +73,12 @@ impl UserSession {
         let reg = Regex::new(r"([\w\d]+)&([\w\d%]+)").unwrap();
 
         if let Some(s) = reg.captures(data) {
-            self.token = s.get(1).unwrap().as_str().to_string();
-            self.session = s.get(2).unwrap().as_str().to_string();
+            if let Some(m) = s.get(1) {
+                self.token = m.as_str().to_string();
+            }
+            if let Some(m) = s.get(2) {
+                self.session = m.as_str().to_string();
+            }
         }
     }
 
@@ -243,28 +247,28 @@ async fn do_login(user: &mut UserSession) -> Result<()> {
 /// 下载方法,使用 UserSession 信息下载
 /// 如果短时间大量下载,尽可能使用不同的user下载
 /// 使用Tokio以及reqwest依赖,确保版本匹配
-pub async fn download(sid: u64, user: &mut UserSession, file_path: &Path) -> Result<()> {
+pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Path) -> Result<()> {
     let url = new_download_set_url(sid);
     let sid = sid.to_string();
     let header = get_download_header(&sid, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        return download_file(data, file_path, &sid).await;
+        return download_file(data, download_file_path, &sid).await;
     }
     // session 可能超时失效 ,进行刷新
     do_home(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        return download_file(data, file_path, &sid).await;
+        return download_file(data, download_file_path, &sid).await;
     }
     // 重新登录
     do_login(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
-        return download_file(data, file_path, &sid).await;
+        return download_file(data, download_file_path, &sid).await;
     }
     // 登录失败抛出错误
     Err(OsuMapDownloadError::LoginFail.into())

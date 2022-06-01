@@ -190,7 +190,7 @@ fn format_cookie_str(xsrf: &str, cookie: &str) -> String {
 }
 
 /// 请求主页,用于得到及session记录
-async fn do_home(user: &mut UserSession) -> Result<()> {
+pub async fn do_home(user: &mut UserSession) -> Result<()> {
     let mut header = HeaderMap::new();
     header.insert(
         "cookie",

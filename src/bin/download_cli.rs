@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use directories::BaseDirs;
-use osu_map_download::util::{do_login, download, OsuMapDownloadError, UserSession};
+use osu_map_download::util::{do_home, do_login, download, OsuMapDownloadError, UserSession};
 use serde::{Deserialize, Serialize};
 use std::{env, fs};
 use std::io::Write;
@@ -94,9 +94,11 @@ async fn login_no_name() -> Result<()>{
     println!("enter osu name:");
     let mut username = String::new();
     std::io::stdin().read_line(&mut username)?;
+    let username = username.trim().to_string();
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     let mut user = UserSession::new(&username, &password);
     println!("login. . .");
+    do_home(&mut user).await?;
     do_login(&mut user).await?;
     println!("success!");
 
@@ -116,6 +118,7 @@ async fn login_name(username: &String) -> Result<()>{
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     println!("login. . .");
     let mut user = UserSession::new(username, &password);
+    do_home(&mut user).await?;
     do_login(&mut user).await?;
     println!("success!");
 

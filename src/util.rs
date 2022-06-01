@@ -89,17 +89,21 @@ impl UserSession {
             // it is safe to unwrap now
             let str = str.unwrap();
             if let Some(xsrf) = REG_XSRF.captures(str) {
-                // If returning None, using old token, if returning Some, update value
-                let old_token = self.token.clone();
+                // 如果正则解析出了新的值，则更新值，否则把原来的值放进去。
+                // 因为字符串拷贝是个开销很大的操作，所以这里先拿了一个原值的引用
+                // 然后用 map_or_else 来懒惰执行。用 closure 之后只有在遇到 None 的时候，
+                // old_token.clone() 才会被执行，于是我们当遇到 Some 的时候我们可以减少
+                // 一次字符串拷贝的开销。
+                let old_token = &self.token;
                 self.token = xsrf
                     .get(1)
-                    .map_or_else(|| old_token, |v| v.as_str().to_string());
+                    .map_or_else(|| old_token.clone(), |v| v.as_str().to_string());
             } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
                 // same as above
-                let old_session = self.session.clone();
+                let old_session = &self.session;
                 self.session = cookie_match
                     .get(1)
-                    .map_or_else(|| old_session, |v| v.as_str().to_string())
+                    .map_or_else(|| old_session.clone(), |v| v.as_str().to_string())
             }
         }
     }

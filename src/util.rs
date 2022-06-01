@@ -87,7 +87,7 @@ async fn response_for_get(url: &str, headers: HeaderMap) -> Result<Response, Box
 async fn response_for_post(
     url: &str,
     headers: HeaderMap,
-    body: HashMap<String, String>,
+    body: HashMap<String, &String>,
 ) -> Result<Response, Box<dyn Error>> {
     let p = CLIENT.post(url).headers(headers).form(&body).send().await?;
     Ok(p)
@@ -207,9 +207,9 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
     );
 
     let mut body = HashMap::new();
-    body.insert("_token".to_string(), user.token.clone());
-    body.insert("username".to_string(), user.name.clone());
-    body.insert("password".to_string(), user.password.to_string());
+    body.insert("_token".to_string(), &user.token);
+    body.insert("username".to_string(), &user.name);
+    body.insert("password".to_string(), &user.password);
 
     let response = response_for_post(LOGIN_URL, header, body).await.unwrap();
 

@@ -212,7 +212,7 @@ async fn do_home(user: &mut UserSession) -> Result<()> {
     }
 }
 /// 更新登陆后的session
-async fn do_login(user: &mut UserSession) -> Result<()> {
+pub async fn do_login(user: &mut UserSession) -> Result<()> {
     let mut header = HeaderMap::new();
     header.insert("referer", HOME_PAGE_URL.parse()?);
     header.insert(

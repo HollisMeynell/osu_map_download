@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -6,9 +7,8 @@ use reqwest::{
     Response, StatusCode,
 };
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::string::String;
+use thiserror::Error;
 
 static HOME_PAGE_URL: &str = "https://osu.ppy.sh/home";
 static LOGIN_URL: &str = "https://osu.ppy.sh/session";
@@ -25,26 +25,17 @@ lazy_static! {
     static ref REG_COOKIE: Regex = Regex::new(r"osu_session=([\w\d%]+);").unwrap();
 }
 
-#[derive(Debug, Clone)]
-///自定义错误
-pub struct OsuMapDownloadError {
-    message: String,
-}
-
-impl Display for OsuMapDownloadError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.message)
-    }
-}
-
-impl Error for OsuMapDownloadError {}
-
-impl OsuMapDownloadError {
-    pub fn new(msg: &str) -> Self {
-        OsuMapDownloadError {
-            message: String::from(msg),
-        }
-    }
+/// 不同类型的错误，在网络请求失败时使用
+#[derive(Debug, Clone, Error)]
+pub enum OsuMapDownloadError {
+    #[error("验证失败,检查是否密码错误")]
+    IncorrectPassword,
+    #[error("登录失败")]
+    LoginFail,
+    #[error("连接失败，检查网络")]
+    NetworkError,
+    #[error("其他异常")]
+    Unknown,
 }
 
 /// 用户信息记录,包含密码,登录后的session
@@ -115,24 +106,24 @@ impl UserSession {
 }
 
 /// 封装的get请求方法
-async fn response_for_get(url: &str, headers: HeaderMap) -> Result<Response, Box<dyn Error>> {
-    let p = CLIENT.get(url).headers(headers).send().await?;
-    Ok(p)
+async fn response_for_get(url: &str, headers: HeaderMap) -> Result<Response> {
+    Ok(CLIENT.get(url).headers(headers).send().await?)
 }
+
 /// 封装的post请求
 async fn response_for_post(
     url: &str,
     headers: HeaderMap,
     body: HashMap<String, &String>,
-) -> Result<Response, Box<dyn Error>> {
-    let p = CLIENT.post(url).headers(headers).form(&body).send().await?;
-    Ok(p)
+) -> Result<Response> {
+    Ok(CLIENT.post(url).headers(headers).form(&body).send().await?)
 }
+
 /// 封装的下载请求
-async fn response_for_download(url: &str, headers: HeaderMap) -> Result<Response, Box<dyn Error>> {
-    let p = CLIENT.get(url).headers(headers).send().await?;
-    Ok(p)
+async fn response_for_download(url: &str, headers: HeaderMap) -> Result<Response> {
+    Ok(CLIENT.get(url).headers(headers).send().await?)
 }
+
 /// 封装的请求头构造
 fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
     let mut header = HeaderMap::new();
@@ -176,8 +167,9 @@ fn test_print_xxx() {
 fn format_cookie_str(xsrf: &str, cookie: &str) -> String {
     format!("XSRF-TOKEN={xsrf}; osu_session={cookie};")
 }
+
 /// 请求主页,用于得到及session记录
-async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
+async fn do_home(user: &mut UserSession) -> Result<()> {
     let mut header = HeaderMap::new();
     header.insert(
         "cookie",
@@ -185,30 +177,30 @@ async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
             .parse()
             .unwrap_or_else(|_| HeaderValue::from(0)),
     );
-    let response = response_for_get(HOME_PAGE_URL, header).await.unwrap();
+    let response = response_for_get(HOME_PAGE_URL, header)
+        .await
+        .with_context(|| "请求主页失败")?;
 
     match response.status() {
         StatusCode::OK => {
             user.update(response.headers());
             Ok(())
         }
-        StatusCode::BAD_REQUEST => Err(OsuMapDownloadError::new("连接失败,检查网络")),
-        _ => Err(OsuMapDownloadError::new("其他异常")),
+        StatusCode::BAD_REQUEST => Err(OsuMapDownloadError::IncorrectPassword.into()),
+        _ => Err(OsuMapDownloadError::Unknown.into()),
     }
 }
 /// 更新登陆后的session
-async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
+async fn do_login(user: &mut UserSession) -> Result<()> {
     let mut header = HeaderMap::new();
-    header.insert("referer", HOME_PAGE_URL.parse().unwrap());
+    header.insert("referer", HOME_PAGE_URL.parse()?);
     header.insert(
         reqwest::header::CONTENT_TYPE,
         reqwest::header::HeaderValue::from_static("application/x-www-form-urlencoded"),
     );
     header.insert(
         reqwest::header::COOKIE,
-        format_cookie_str(&user.token, &user.session)
-            .parse()
-            .unwrap(),
+        format_cookie_str(&user.token, &user.session).parse()?,
     );
 
     let mut body = HashMap::new();
@@ -216,7 +208,9 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
     body.insert("username".to_string(), &user.name);
     body.insert("password".to_string(), &user.password);
 
-    let response = response_for_post(LOGIN_URL, header, body).await.unwrap();
+    let response = response_for_post(LOGIN_URL, header, body)
+        .await
+        .with_context(|| "登录请求无回复")?;
 
     match response.status() {
         StatusCode::OK => {
@@ -224,17 +218,17 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
             //pring_xxx(&f);
             Ok(())
         }
-        StatusCode::FORBIDDEN => Err(OsuMapDownloadError::new("验证失败,检查是否密码错误")),
-        _ => Err(OsuMapDownloadError::new("其他异常")),
+        StatusCode::FORBIDDEN => Err(OsuMapDownloadError::IncorrectPassword.into()),
+        _ => Err(OsuMapDownloadError::Unknown.into()),
     }
 }
 /// 下载方法,使用UserSession信息下载
 /// 如果短时间大量下载,尽可能使用不同的user下载
 /// 使用Tokio以及reqwest依赖,确保版本匹配
-pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<dyn Error>> {
-    let id_str = sid.to_string();
+pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes> {
     let url = new_download_set_url(sid);
-    let header = get_download_header(&id_str, user);
+    let sid = sid.to_string();
+    let header = get_download_header(&sid, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
@@ -243,7 +237,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     }
     // session 可能超时失效 ,进行刷新
     do_home(user).await?;
-    let header = get_download_header(&id_str, user);
+    let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
@@ -251,12 +245,12 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     }
     // 重新登录
     do_login(user).await?;
-    let header = get_download_header(&id_str, user);
+    let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
     if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }
     // 登录失败抛出错误
-    Err(Box::new(OsuMapDownloadError::new("下载失败")))
+    Err(OsuMapDownloadError::LoginFail.into())
 }

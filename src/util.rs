@@ -126,17 +126,17 @@ fn get_new_cookie(header: &HeaderMap, user: &mut UserSession) -> (Option<String>
     for val in all {
         str = val.to_str().unwrap_or("");
         if let Some(xsrf) = REG_XSRF.captures(str) {
-            if token.eq(&None) {
+            if token.is_none() {
                 token = Some(get_regex_one(xsrf));
                 user.token = token.as_ref().unwrap().clone();
             }
         } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
-            if cookie.eq(&None) {
+            if cookie.is_none() {
                 cookie = Some(get_regex_one(cookie_match));
                 user.session = cookie.as_ref().unwrap().clone();
             }
         }
-        if !token.eq(&None) && !cookie.eq(&None) {
+        if token.is_some() && cookie.is_some() {
             return (token, cookie);
         }
     }

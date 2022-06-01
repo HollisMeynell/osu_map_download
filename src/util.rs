@@ -232,7 +232,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     let header = get_download_header(&id_str, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }
@@ -240,7 +240,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     do_home(user).await?;
     let header = get_download_header(&id_str, user);
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }
@@ -248,7 +248,7 @@ pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<
     do_login(user).await?;
     let header = get_download_header(&id_str, user);
     let data = response_for_download(&url, header).await?;
-    if data.status().eq(&StatusCode::OK) {
+    if data.status() == StatusCode::OK {
         let p: Bytes = data.bytes().await?;
         return Ok(p);
     }

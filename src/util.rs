@@ -102,7 +102,7 @@ fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
     let mut header = HeaderMap::new();
     let cookie_key = COOKIE;
     header.insert(
-        cookie_key.clone(),
+        cookie_key,
         format_cookie_str(&user.token, &user.session)
             .parse()
             .unwrap(),

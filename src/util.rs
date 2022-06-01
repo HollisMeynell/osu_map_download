@@ -85,6 +85,8 @@ impl UserSession {
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留
     pub fn update(&mut self, header_map: &HeaderMap) {
         let all_headers = header_map.get_all("set-cookie");
+        let mut xsrf_change = false;
+        let mut cookie_change = false;
         for header in all_headers {
             let str = header.to_str();
             // early return to save regexp match time
@@ -99,16 +101,26 @@ impl UserSession {
                 // 然后用 map_or_else 来懒惰执行。用 closure 之后只有在遇到 None 的时候，
                 // old_token.clone() 才会被执行，于是我们当遇到 Some 的时候我们可以减少
                 // 一次字符串拷贝的开销。
-                let old_token = &self.token;
-                self.token = xsrf
-                    .get(1)
-                    .map_or_else(|| old_token.clone(), |v| v.as_str().to_string());
+                if !xsrf_change {
+                    let old_token = &self.token;
+                    self.token = xsrf
+                        .get(1)
+                        .map_or_else(|| old_token.clone(), |v| v.as_str().to_string());
+                    xsrf_change = true;
+                }
             } else if let Some(cookie_match) = REG_COOKIE.captures(str) {
                 // same as above
-                let old_session = &self.session;
-                self.session = cookie_match
-                    .get(1)
-                    .map_or_else(|| old_session.clone(), |v| v.as_str().to_string())
+                if !cookie_change {
+                    let old_session = &self.session;
+                    self.session = cookie_match
+                        .get(1)
+                        .map_or_else(|| old_session.clone(), |v| v.as_str().to_string());
+                    cookie_change = true;
+                }
+            }
+
+            if xsrf_change && cookie_change {
+                break;
             }
         }
     }
@@ -143,7 +155,7 @@ fn get_download_header(id_str: &str, user: &mut UserSession) -> HeaderMap {
             .parse()
             .unwrap(),
     );
-    let mut back_url = "https://osu.ppy.sh/beatmapsets/%s".to_string();
+    let mut back_url = "https://osu.ppy.sh/beatmapsets/".to_string();
     back_url.push_str(id_str);
     header.insert("referer", back_url.parse().unwrap());
     header.insert(

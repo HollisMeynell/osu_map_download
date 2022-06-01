@@ -12,7 +12,12 @@ use std::string::String;
 
 static HOME_PAGE_URL: &str = "https://osu.ppy.sh/home";
 static LOGIN_URL: &str = "https://osu.ppy.sh/session";
-static DOWNLOAD_URL: &str = "https://osu.ppy.sh/beatmapsets/%s/download?noVideo=1";
+
+macro_rules! new_download_url {
+    ($expr:expr) => {
+        format!("https://osu.ppy.sh/beatmapsets/{sid}/download?noVideo=1", sid = $expr)
+    };
+}
 
 lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::new();
@@ -228,7 +233,7 @@ async fn do_login(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
 /// 使用Tokio以及reqwest依赖,确保版本匹配
 pub async fn do_download(sid: u64, user: &mut UserSession) -> Result<Bytes, Box<dyn Error>> {
     let id_str = sid.to_string();
-    let url = DOWNLOAD_URL.to_string().replace("%s", &id_str);
+    let url = new_download_url!(sid);
     let header = get_download_header(&id_str, user);
     // 尝试使用已保存的session信息直接下载
     let data = response_for_download(&url, header).await?;

@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use directories::BaseDirs;
-use osu_map_download::util::{do_download, UserSession};
+use osu_map_download::util::{download, UserSession};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
+use std::path::Path;
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -50,9 +50,12 @@ async fn run() -> Result<()> {
 
     println!("正在下载...");
 
-    let p = do_download(cli.sid, &mut user).await?;
-    let mut file = fs::File::create(format!(r".\{}.zip", cli.sid))?;
-    file.write(&p).with_context(|| "文件写入失败")?;
+    download(
+        cli.sid,
+        &mut user,
+        Path::new(&format!(r".\{}.zip", cli.sid)),
+    )
+    .await?;
 
     println!("下载完成");
     Ok(())

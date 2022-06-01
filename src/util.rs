@@ -76,16 +76,17 @@ impl UserSession {
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留
     pub fn update(&mut self, header_map: &HeaderMap) {
         let all_headers = header_map.get_all("set-cookie");
-        let mut xsrf_change = false;
-        let mut cookie_change = false;
+        let (mut xsrf_change, mut cookie_change) = (false, false);
+
         for header in all_headers {
             let str = header.to_str();
-            // early return to save regexp match time
             if str.is_err() {
+                // empty header, just enter into next loop
                 continue;
             }
-            // it is safe to unwrap now
             let str = str.unwrap();
+
+            // FIXME: This condition can be rewrite into if let chain after Rust 1.63 released
             if !xsrf_change {
                 if let Some(xsrf) = REG_XSRF.captures(str) {
                     let old_token = &self.token;

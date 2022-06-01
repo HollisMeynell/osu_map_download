@@ -178,7 +178,7 @@ async fn do_home(user: &mut UserSession) -> Result<(), OsuMapDownloadError> {
         "cookie",
         format_cookie_str(&user.token, &user.session)
             .parse()
-            .unwrap_or(HeaderValue::from(0)),
+            .unwrap_or_else(|_| HeaderValue::from(0)),
     );
     let response = response_for_get(HOME_PAGE_URL, header).await.unwrap();
 

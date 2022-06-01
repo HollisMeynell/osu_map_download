@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use directories::BaseDirs;
 use osu_map_download::util::{do_download, UserSession};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 
@@ -17,14 +19,34 @@ struct Cli {
     password: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    username: String,
+    password: String,
+}
+
 async fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    if cli.username.is_none() || cli.password.is_none() {
-        println!("正在从配置文件中读取用户信息......")
+    let mut username = cli.username;
+    let mut password = cli.password;
+
+    if username.is_none() || password.is_none() {
+        println!("正在从配置文件中读取用户信息......");
+        let basedir = BaseDirs::new().ok_or_else(|| anyhow::anyhow!("找不到你的系统配置目录"))?;
+        // C:\Users\ABCDE\AppData\Roaming\OsuMapDownloader\config.json
+        let path = basedir
+            .config_dir()
+            .join("OsuMapDownloader")
+            .join("config.json");
+        let config = fs::read(path).with_context(|| "读取用户配置失败")?;
+        let config: Config = serde_json::from_slice(&config)
+            .with_context(|| "解析用户配置失败，请删除掉配置文件重试！")?;
+        username.replace(config.username);
+        password.replace(config.password);
     }
 
-    let mut user = UserSession::new(&cli.username.unwrap(), &cli.password.unwrap());
+    let mut user = UserSession::new(&username.unwrap(), &password.unwrap());
 
     println!("正在下载...");
 

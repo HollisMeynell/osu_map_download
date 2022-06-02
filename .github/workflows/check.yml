@@ -1,0 +1,56 @@
+name: 'Code Check'
+
+on:
+  push:
+    paths:
+      - ".github/workflows/check.yml"
+      - "src/**"
+      - "Cargo.toml"
+
+jobs:
+  build:
+    env:
+      RUSTFLAGS: "-D warnings"
+    name: Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      # Download Source Code
+      - name: Git Checkout
+        uses: actions/checkout@v3
+
+      # Install Dependencies
+      - name: Install Dependencies
+        run: 'sudo apt-get update && sudo apt-get install -y --no-install-recommends openssl sqlite build-essential libmariadb-dev-compat libpq-dev libssl-dev pkgconf'
+
+      # Cache
+      - name: Add sccache
+        uses: Swatinem/rust-cache@v1
+
+      # Install toolchain
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      # Run cargo clippy, abort with warnings
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --release -- -D warnings
+
+      # Check code format
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      # Check it
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --release

@@ -32,7 +32,12 @@ struct Config {
 async fn run(sid: u64, user: &mut UserSession) -> Result<()> {
     println!("正在下载...");
 
-    download(sid, user, Path::new(&format!(r"{}.zip", sid))).await?;
+    download(
+        sid,
+        user,
+        Path::new(&format!(r"{}.zip", sid)),
+    )
+    .await?;
 
     println!("下载完成");
     Ok(())

@@ -1,10 +1,12 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use directories::BaseDirs;
-use osu_map_download::util::{do_home, do_login, download, UserSession};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::{Path, PathBuf};
+
+use osu_map_download::util::{do_home, do_login, download, UserSession};
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -32,7 +34,7 @@ struct Config {
     save_path: String,
 }
 
-async fn run(sid:u64, user:&mut UserSession, path:&PathBuf) -> Result<()> {
+async fn run(sid: u64, user: &mut UserSession, path: &PathBuf) -> Result<()> {
     if !path.is_dir() {
         return Err(anyhow!("\"{:?}\"路径不存在", path));
     }
@@ -42,11 +44,12 @@ async fn run(sid:u64, user:&mut UserSession, path:&PathBuf) -> Result<()> {
         user,
         path.join(&format!(r"{}.osz", sid)).as_path(),
     )
-    .await?;
+        .await?;
 
     println!("下载完成");
     Ok(())
 }
+
 /// windows:$HOME\AppData\Roaming\OsuMapDownloader\config.json
 /// linux:$HOME/.config/OsuMapDownloader\config.json
 /// macos:$HOME/Library/Application Support/OsuMapDownloader\config.json
@@ -65,9 +68,9 @@ fn get_config_path() -> Result<PathBuf> {
 
     if !file.is_file() {
         let file = fs::File::create(file);
-        if file.is_err() {
+        if let Err(e) = file {
             return Err(anyhow!(
-                "创建配置文件失败,请检查程序目录下是否有名为'config.json'的文件夹"
+                "创建配置文件失败:\n{e}"
             ));
         }
     }
@@ -75,8 +78,7 @@ fn get_config_path() -> Result<PathBuf> {
     Ok(dir)
 }
 
-fn read_config(path:&Path) -> Result<(UserSession, PathBuf)>{
-
+fn read_config(path: &Path) -> Result<(UserSession, PathBuf)> {
     let config = fs::read(path).with_context(|| "读取用户配置失败")?;
     let config: Config = serde_json::from_slice(&config).with_context(|| {
         "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
@@ -97,7 +99,8 @@ fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<(
     fs::write(user_config_path, config_str.as_bytes())?;
     Ok(())
 }
-fn save_download_path(path:String, user_config_path: &Path) -> Result<()> {
+
+fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
     let dir = fs::read_link(&path)?;
     if !dir.is_dir() {
         println!("{:?}文件夹不存在,正在创建...", dir);
@@ -114,7 +117,7 @@ fn save_download_path(path:String, user_config_path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn login_no_name() -> Result<()>{
+async fn login_no_name() -> Result<()> {
     println!("enter osu name:");
     let mut username = String::new();
     std::io::stdin().read_line(&mut username)?;
@@ -130,7 +133,7 @@ async fn login_no_name() -> Result<()>{
         username,
         password,
         session: user.save_session(),
-        save_path:"./".to_string()
+        save_path: "./".to_string(),
     };
     let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
@@ -138,6 +141,7 @@ async fn login_no_name() -> Result<()>{
 
     Ok(())
 }
+
 async fn login_name(username: &String) -> Result<()> {
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     println!("login. . .");
@@ -150,7 +154,7 @@ async fn login_name(username: &String) -> Result<()> {
         username: username.clone(),
         password,
         session: user.save_session(),
-        save_path:"./".to_string()
+        save_path: "./".to_string(),
     };
     let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
@@ -158,6 +162,7 @@ async fn login_name(username: &String) -> Result<()> {
 
     Ok(())
 }
+
 async fn handle_login(cli: &Cli) -> Result<()> {
     if let Some(s) = &cli.user {
         login_name(s).await?;
@@ -172,7 +177,7 @@ async fn handle_login(cli: &Cli) -> Result<()> {
 async fn main() -> Result<()> {
     let cli: Cli = Cli::parse();
     if cli.clear {
-        let mut  path = get_config_path()?;
+        let mut path = get_config_path()?;
         // 清除配置文件
         fs::remove_file(path.as_path())?;
         // 移除目录
@@ -190,13 +195,13 @@ async fn main() -> Result<()> {
         let confih_path = get_config_path()?;
         save_download_path(
             path,
-            confih_path.as_path()
+            confih_path.as_path(),
         )?;
         return Ok(());
     }
     if let Some(sid) = cli.sid {
         let path = get_config_path()?;
-        let(mut user, save_path) = read_config(path.as_path())?;
+        let (mut user, save_path) = read_config(path.as_path())?;
         run(sid, &mut user, &save_path).await?;
         save_user_cookie(&mut user, path.as_path())?;
     }

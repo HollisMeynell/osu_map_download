@@ -39,7 +39,7 @@ async fn run(sid:u64, user:&mut UserSession) -> Result<()> {
     download(
         sid,
         user,
-        Path::new(&format!(r".\{}.zip", sid)),
+        Path::new(&format!(r"{}.zip", sid)),
     )
     .await?;
 

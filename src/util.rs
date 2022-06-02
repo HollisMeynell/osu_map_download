@@ -257,6 +257,7 @@ pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Pat
         return download_file(data, download_file_path, &sid).await;
     }
     // session 可能超时失效 ,进行刷新
+    println!("刷新中");
     do_home(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;
@@ -264,6 +265,7 @@ pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Pat
         return download_file(data, download_file_path, &sid).await;
     }
     // 重新登录
+    println!("重新登录");
     do_login(user).await?;
     let header = get_download_header(&sid, user);
     let data = response_for_download(&url, header).await?;

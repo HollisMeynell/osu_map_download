@@ -100,7 +100,7 @@ fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<(
     Ok(())
 }
 fn save_download_path(path:String, user_config_path: &Path) -> Result<()> {
-    let dir = fs::read_link(&Path)?;
+    let dir = fs::read_link(&path)?;
     if !dir.is_dir() {
         println!("{:?}文件夹不存在,正在创建...", dir);
         fs::create_dir_all(dir.as_path());
@@ -108,7 +108,7 @@ fn save_download_path(path:String, user_config_path: &Path) -> Result<()> {
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
     let mut config: Config = serde_json::from_slice(&config)
         .with_context(|| "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行")?;
-    config.save_path = path.to_string();
+    config.save_path = path;
     let config_str =
         serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
@@ -131,7 +131,6 @@ async fn login_no_name() -> Result<()>{
     let config = Config {
         username,
         password,
-        session: user.save_session(),
         session: user.save_session(),
         save_path:"./".to_string()
     };

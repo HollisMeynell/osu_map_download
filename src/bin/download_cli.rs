@@ -58,11 +58,16 @@ fn get_config_path() -> Result<PathBuf> {
 
     let dir = basedir
         .config_dir()
-        .join("OsuMapDownloader")
-        .join("config.json");
+        .join("OsuMapDownloader");
     // 当前路径
     // let mut dir = env::current_dir()?;
     // dir.push("config.json");
+
+    if !dir.is_dir() {
+        fs::create_dir_all(dir.as_path())?;
+    }
+
+    let dir = dir.join("config.json");
 
     let file = dir.as_path();
 

@@ -68,18 +68,22 @@ fn get_config_path() -> Result<PathBuf> {
     if !file.is_file() {
         let file = fs::File::create(file);
         if file.is_err() {
-           return Err(anyhow!("创建配置文件失败,请检查程序目录下是否有名为'config.json'的文件夹"));
+            return Err(anyhow!(
+                "创建配置文件失败,请检查程序目录下是否有名为'config.json'的文件夹"
+            ));
         }
     }
-    return Ok(dir)
+
+    Ok(dir)
 }
 
 fn read_config(path:&Path) -> Result<(UserSession, PathBuf)>{
 
     let config = fs::read(path).with_context(|| "读取用户配置失败")?;
-    let config: Config = serde_json::from_slice(&config)
-        .with_context(|| "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行")?;
-    let mut user = UserSession::new(&config.username,&config.password);
+    let config: Config = serde_json::from_slice(&config).with_context(|| {
+        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
+    })?;
+    let mut user = UserSession::new(&config.username, &config.password);
     user.read_session(&config.session);
     let path = PathBuf::from(config.save_path);
     Ok((user, path))
@@ -87,11 +91,11 @@ fn read_config(path:&Path) -> Result<(UserSession, PathBuf)>{
 
 fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<()> {
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut  config: Config = serde_json::from_slice(&config)
-        .with_context(|| "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行")?;
+    let mut config: Config = serde_json::from_slice(&config).with_context(|| {
+        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
+    })?;
     config.session = user.save_session();
-    let config_str =
-        serde_json::to_string(&config)?;
+    let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     Ok(())
 }
@@ -124,20 +128,20 @@ async fn login_no_name() -> Result<()>{
     do_login(&mut user).await?;
     println!("success!");
 
-    let config = Config{
+    let config = Config {
         username,
         password,
-        session:user.save_session(),
+        session: user.save_session(),
+        session: user.save_session(),
         save_path:"./".to_string()
     };
-    let config_str =
-        serde_json::to_string(&config)?;
+    let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
     fs::write(file.as_path(), config_str.as_bytes())?;
 
     Ok(())
 }
-async fn login_name(username: &String) -> Result<()>{
+async fn login_name(username: &String) -> Result<()> {
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     println!("login. . .");
     let mut user = UserSession::new(username, &password);
@@ -145,23 +149,31 @@ async fn login_name(username: &String) -> Result<()>{
     do_login(&mut user).await?;
     println!("success!");
 
-    let config = Config{
+    let config = Config {
         username: username.clone(),
         password,
-        session:user.save_session(),
+        session: user.save_session(),
         save_path:"./".to_string()
     };
-    let config_str =
-        serde_json::to_string(&config)?;
+    let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
     fs::write(file.as_path(), config_str.as_bytes())?;
+
+    Ok(())
+}
+async fn handle_login(cli: &Cli) -> Result<()> {
+    if let Some(s) = &cli.user {
+        login_name(s).await?;
+    } else {
+        login_no_name().await?;
+    }
 
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli:Cli = Cli::parse();
+    let cli: Cli = Cli::parse();
     if cli.clear {
         let mut  path = get_config_path()?;
         // 清除配置文件
@@ -172,12 +184,9 @@ async fn main() -> Result<()> {
         }
         println!("清理完毕!");
     }
+
     if cli.login {
-       if let Some(s) = cli.user {
-           login_name(&s).await?;
-       } else {
-           login_no_name().await?;
-       }
+        handle_login(&cli).await?;
         return Ok(());
     }
     if let Some(path) = cli.save_path {

@@ -1,12 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use directories::BaseDirs;
-use osu_map_download::util::{do_home, do_login, download, OsuMapDownloadError, UserSession};
+use osu_map_download::util::{do_home, do_login, download, UserSession};
 use serde::{Deserialize, Serialize};
-use std::{env, fs};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
-use reqwest::StatusCode;
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -103,7 +101,7 @@ fn save_download_path(path:String, user_config_path: &Path) -> Result<()> {
     let dir = fs::read_link(&path)?;
     if !dir.is_dir() {
         println!("{:?}文件夹不存在,正在创建...", dir);
-        fs::create_dir_all(dir.as_path());
+        fs::create_dir_all(dir.as_path())?;
     }
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
     let mut config: Config = serde_json::from_slice(&config)
@@ -176,10 +174,10 @@ async fn main() -> Result<()> {
     if cli.clear {
         let mut  path = get_config_path()?;
         // 清除配置文件
-        fs::remove_file(path.as_path());
+        fs::remove_file(path.as_path())?;
         // 移除目录
         if path.pop() {
-            fs::remove_dir(path.as_path());
+            fs::remove_dir(path.as_path())?;
         }
         println!("清理完毕!");
     }
@@ -193,14 +191,14 @@ async fn main() -> Result<()> {
         save_download_path(
             path,
             confih_path.as_path()
-        );
+        )?;
         return Ok(());
     }
     if let Some(sid) = cli.sid {
         let path = get_config_path()?;
         let(mut user, save_path) = read_config(path.as_path())?;
         run(sid, &mut user, &save_path).await?;
-        save_user_cookie(&mut user, path.as_path());
+        save_user_cookie(&mut user, path.as_path())?;
     }
     Ok(())
 }

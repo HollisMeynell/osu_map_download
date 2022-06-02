@@ -1,3 +1,6 @@
+use std::string::String;
+use std::{collections::HashMap, path::Path};
+
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -7,8 +10,6 @@ use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
 };
-use std::string::String;
-use std::{collections::HashMap, path::Path};
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -211,6 +212,7 @@ pub async fn do_home(user: &mut UserSession) -> Result<()> {
         _ => Err(OsuMapDownloadError::Unknown.into()),
     }
 }
+
 /// 更新登陆后的session
 pub async fn do_login(user: &mut UserSession) -> Result<()> {
     let mut header = HeaderMap::new();
@@ -284,8 +286,8 @@ async fn download_file(resp: Response, write_to: &Path, sid: &str) -> Result<()>
     let filename = write_to.file_name().unwrap().to_str().unwrap();
     let bar = ProgressBar::new(total_size);
     bar.set_style(ProgressStyle::default_bar()
-                  .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-                  .progress_chars("#>-"));
+        .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+        .progress_chars("#>-"));
     bar.set_message(format!("正在下载谱面 {sid}"));
     let mut file = File::create(write_to).await?;
     let mut downloaded = 0;

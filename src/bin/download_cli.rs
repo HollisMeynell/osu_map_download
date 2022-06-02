@@ -39,12 +39,7 @@ async fn run(sid: u64, user: &mut UserSession, path: &PathBuf) -> Result<()> {
         return Err(anyhow!("\"{:?}\"路径不存在", path));
     }
     println!("正在下载...");
-    download(
-        sid,
-        user,
-        path.join(&format!(r"{}.osz", sid)).as_path(),
-    )
-        .await?;
+    download(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
 
     println!("下载完成");
     Ok(())
@@ -56,9 +51,7 @@ async fn run(sid: u64, user: &mut UserSession, path: &PathBuf) -> Result<()> {
 fn get_config_path() -> Result<PathBuf> {
     let basedir = BaseDirs::new().ok_or_else(|| anyhow::anyhow!("找不到你的系统配置目录"))?;
 
-    let dir = basedir
-        .config_dir()
-        .join("OsuMapDownloader");
+    let dir = basedir.config_dir().join("OsuMapDownloader");
     // 当前路径
     // let mut dir = env::current_dir()?;
     // dir.push("config.json");
@@ -74,9 +67,7 @@ fn get_config_path() -> Result<PathBuf> {
     if !file.is_file() {
         let file = fs::File::create(file);
         if let Err(e) = file {
-            return Err(anyhow!(
-                "创建配置文件失败:\n{e}"
-            ));
+            return Err(anyhow!("创建配置文件失败:\n{e}"));
         }
     }
 
@@ -112,11 +103,11 @@ fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
         fs::create_dir_all(dir.as_path())?;
     }
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut config: Config = serde_json::from_slice(&config)
-        .with_context(|| "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行")?;
+    let mut config: Config = serde_json::from_slice(&config).with_context(|| {
+        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
+    })?;
     config.save_path = path;
-    let config_str =
-        serde_json::to_string(&config)?;
+    let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     println!("设置完毕!");
     Ok(())
@@ -198,10 +189,7 @@ async fn main() -> Result<()> {
     }
     if let Some(path) = cli.save_path {
         let confih_path = get_config_path()?;
-        save_download_path(
-            path,
-            confih_path.as_path(),
-        )?;
+        save_download_path(path, confih_path.as_path())?;
         return Ok(());
     }
     if let Some(sid) = cli.sid {

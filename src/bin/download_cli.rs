@@ -18,7 +18,7 @@ struct Cli {
     sid: Option<u64>,
     #[clap(short, help = "登录")]
     login: bool,
-    #[clap(short, long, help = "用户名")]
+    #[clap(short, long, help = "用户名", allow_hyphen_values = true)]
     user: Option<String>,
     #[clap(short, help = "清空缓存文件")]
     clear: bool,
@@ -28,9 +28,6 @@ struct Cli {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
-    username: String,
-    password: String,
-    session: String,
     save_path: String,
 }
 
@@ -74,26 +71,13 @@ fn get_config_path() -> Result<PathBuf> {
     Ok(dir)
 }
 
-fn read_config(path: &Path) -> Result<(UserSession, PathBuf)> {
+fn read_config(path: &Path) -> Result<PathBuf> {
     let config = fs::read(path).with_context(|| "读取用户配置失败")?;
     let config: Config = serde_json::from_slice(&config).with_context(|| {
         "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
     })?;
-    let mut user = UserSession::new(&config.username, &config.password);
-    user.read_session(&config.session);
     let path = PathBuf::from(config.save_path);
-    Ok((user, path))
-}
-
-fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<()> {
-    let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut config: Config = serde_json::from_slice(&config).with_context(|| {
-        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
-    })?;
-    config.session = user.save_session();
-    let config_str = serde_json::to_string(&config)?;
-    fs::write(user_config_path, config_str.as_bytes())?;
-    Ok(())
+    Ok(path)
 }
 
 fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
@@ -126,15 +110,13 @@ async fn login_no_name() -> Result<()> {
     println!("success!");
 
     let config = Config {
-        username,
-        password,
-        session: user.save_session(),
         save_path: "./".to_string(),
     };
     let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
     fs::write(file.as_path(), config_str.as_bytes())?;
 
+    user.save()?;
     Ok(())
 }
 
@@ -147,15 +129,13 @@ async fn login_name(username: &String) -> Result<()> {
     println!("success!");
 
     let config = Config {
-        username: username.clone(),
-        password,
-        session: user.save_session(),
         save_path: "./".to_string(),
     };
     let config_str = serde_json::to_string(&config)?;
     let file = get_config_path()?;
     fs::write(file.as_path(), config_str.as_bytes())?;
 
+    user.save()?;
     Ok(())
 }
 
@@ -194,9 +174,10 @@ async fn main() -> Result<()> {
     }
     if let Some(sid) = cli.sid {
         let path = get_config_path()?;
-        let (mut user, save_path) = read_config(path.as_path())?;
+        let mut user = UserSession::from()?;
+        let save_path = read_config(path.as_path())?;
         run(sid, &mut user, &save_path).await?;
-        save_user_cookie(&mut user, path.as_path())?;
+        user.save()?;
     }
     Ok(())
 }

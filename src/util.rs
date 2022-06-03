@@ -6,14 +6,11 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use keyring::Entry;
 use lazy_static::lazy_static;
-use rand::Rng;
 use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
 };
-use serde::de::Unexpected::Str;
-use serde_json::Value::String;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -70,11 +67,11 @@ impl UserSession {
     }
 
     /// 保存当前session
-    pub fn save_session(&self) -> String {
+    fn save_session(&self) -> String {
         format!("{}&{}", self.token, self.session)
     }
     /// 通过保存的session数据恢复
-    pub fn read_session(&mut self, data: &str) {
+    fn read_session(&mut self, data: &str) {
         let reg = Regex::new(r"([\w\d]+)&([\w\d%]+)").unwrap();
 
         if let Some(s) = reg.captures(data) {
@@ -87,23 +84,18 @@ impl UserSession {
         }
     }
 
-    pub fn save(&self) -> String {
-        let key = rand::thread_rng()
-            .sample_iter(rand::distributions::Alphanumeric)
-            .take(16)
-            .collect();
-        Entry::new("osu_map_download", "login").set_password(&self.name);
-        Entry::new("osu_map_download:password", &self.name).set_password(&self.password);
+    pub fn save(&self) -> Result<()> {
+        Entry::new("osu_map_download", "login").set_password(&self.name)?;
+        Entry::new("osu_map_download:password", &self.name).set_password(&self.password)?;
         Entry::new("osu_map_download_session:token", &self.name)
-            .set_password(self.save_session().as_str());
-        key
+            .set_password(self.save_session().as_str())?;
+        Ok(())
     }
 
     pub fn from() -> Result<Self> {
-        let username = Entry::new(&format!("osu_map_download-{key}"), name).get_password()?;
-        let password = Entry::new(&format!("osu_map_download-{key}"), name).get_password()?;
-        let session =
-            Entry::new(&format!("osu_map_download_session-{key}"), name).get_password()?;
+        let username = Entry::new("osu_map_download", "login").get_password()?;
+        let password = Entry::new("osu_map_download:password", &username).get_password()?;
+        let session = Entry::new("osu_map_download_session:token", &username).get_password()?;
         let mut user = UserSession {
             name: username,
             password,

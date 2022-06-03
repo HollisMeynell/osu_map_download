@@ -1,8 +1,10 @@
 mod core;
-mod session;
+mod user;
+mod error;
+// mod io
 
 /// A re-export module, user should only use this function
 pub mod prelude {
-    pub use crate::session::UserSession;
-    pub use crate::core::{download, login, visit_home};
+    pub use crate::user::UserSession;
+    pub use crate::core::download;
 }

@@ -1,0 +1,69 @@
+name: Build
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build.yml"
+      - "src/**"
+      - "Cargo.*"
+  pull_request:
+    paths:
+      - ".github/workflows/build.yml"
+      - "src/**"
+      - "Cargo.*"
+
+jobs:
+  build:
+    # Make warnings errors, this is to prevent warnings slipping through.
+    # This is done globally to prevent rebuilds when the RUSTFLAGS env variable changes.
+    env:
+      RUSTFLAGS: "-D warnings"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust:
+          - stable
+        include:
+          - os: ubuntu-latest
+            run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssl sqlite build-essential libmariadb-dev-compat libpq-dev libssl-dev pkgconf
+            ext: ""
+          - os: windows-latest
+            ext: ".exe"
+          - os: macos-latest
+            ext: ""
+
+    name: Building on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Checkout the repo
+      - name: Checkout
+        uses: actions/checkout@v3
+      # End Checkout the repo
+
+      # Enable Rust Caching
+      - uses: Swatinem/rust-cache@v1
+      # End Enable Rust Caching
+
+      # Uses the rust-toolchain file to determine version
+      - name: 'Install Rust toolchain for os: ${{ matrix.os }}'
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+      # End Uses the rust-toolchain file to determine version
+
+      # Build the binary
+      - name: "`cargo build --release"
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+      # End Build the binary
+
+      # Upload artifact to Github Actions
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: osu-map-downloader-${{ matrix.os }}${{ matrix.ext }}
+          path: target/release/download_cli${{ matrix.ext }}
+      # End Upload artifact to Github Actions

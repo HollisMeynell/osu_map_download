@@ -4,12 +4,16 @@ use std::{collections::HashMap, path::Path};
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use keyring::Entry;
 use lazy_static::lazy_static;
+use rand::Rng;
 use regex::Regex;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE, COOKIE},
     Response, StatusCode,
 };
+use serde::de::Unexpected::Str;
+use serde_json::Value::String;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -66,7 +70,7 @@ impl UserSession {
     }
 
     /// 保存当前session
-    pub fn save_session(&mut self) -> String {
+    pub fn save_session(&self) -> String {
         format!("{}&{}", self.token, self.session)
     }
     /// 通过保存的session数据恢复
@@ -81,6 +85,33 @@ impl UserSession {
                 self.session = m.as_str().to_string();
             }
         }
+    }
+
+    pub fn save(&self) -> String {
+        let key = rand::thread_rng()
+            .sample_iter(rand::distributions::Alphanumeric)
+            .take(16)
+            .collect();
+        Entry::new("osu_map_download", "login").set_password(&self.name);
+        Entry::new("osu_map_download:password", &self.name).set_password(&self.password);
+        Entry::new("osu_map_download_session:token", &self.name)
+            .set_password(self.save_session().as_str());
+        key
+    }
+
+    pub fn from() -> Result<Self> {
+        let username = Entry::new(&format!("osu_map_download-{key}"), name).get_password()?;
+        let password = Entry::new(&format!("osu_map_download-{key}"), name).get_password()?;
+        let session =
+            Entry::new(&format!("osu_map_download_session-{key}"), name).get_password()?;
+        let mut user = UserSession {
+            name: username,
+            password,
+            token: String::new(),
+            session: String::new(),
+        };
+        user.read_session(session.as_str());
+        Ok(user)
     }
 
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留

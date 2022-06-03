@@ -6,7 +6,7 @@ use clap::Parser;
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 
-use osu_map_download::util::{do_home, do_login, download, UserSession};
+use osu_map_download::prelude::*;
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -121,8 +121,8 @@ async fn login_no_name() -> Result<()> {
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     let mut user = UserSession::new(&username, &password);
     println!("login. . .");
-    do_home(&mut user).await?;
-    do_login(&mut user).await?;
+    visit_home(&mut user).await?;
+    login(&mut user).await?;
     println!("success!");
 
     let config = Config {
@@ -142,8 +142,8 @@ async fn login_name(username: &String) -> Result<()> {
     let password = rpassword::prompt_password(format!("enter {username}'s password:\n"))?;
     println!("login. . .");
     let mut user = UserSession::new(username, &password);
-    do_home(&mut user).await?;
-    do_login(&mut user).await?;
+    visit_home(&mut user).await?;
+    login(&mut user).await?;
     println!("success!");
 
     let config = Config {

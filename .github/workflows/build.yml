@@ -2,10 +2,8 @@ name: Build
 
 on:
   push:
-    paths:
-      - ".github/workflows/build.yml"
-      - "src/**"
-      - "Cargo.*"
+    tags:
+      - "v*.*.*"
 
 jobs:
   build:
@@ -60,9 +58,8 @@ jobs:
       # End Build the binary
 
       # Upload artifact to Github Actions
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Publish
+        uses: softprops/action-gh-release@v1
         with:
-          name: osu-map-downloader-${{ matrix.os }}${{ matrix.ext }}
-          path: target/release/download_cli${{ matrix.ext }}
+          files: target/release/download_cli${{ matrix.ext }}
       # End Upload artifact to Github Actions

@@ -6,11 +6,6 @@ on:
       - ".github/workflows/build.yml"
       - "src/**"
       - "Cargo.*"
-  pull_request:
-    paths:
-      - ".github/workflows/build.yml"
-      - "src/**"
-      - "Cargo.*"
 
 jobs:
   build:
@@ -57,7 +52,7 @@ jobs:
       # End Uses the rust-toolchain file to determine version
 
       # Build the binary
-      - name: "`cargo build --release"
+      - name: "cargo build --release"
         uses: actions-rs/cargo@v1
         with:
           command: build

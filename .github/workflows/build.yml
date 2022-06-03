@@ -6,11 +6,6 @@ on:
       - ".github/workflows/build.yml"
       - "src/**"
       - "Cargo.*"
-  pull_request:
-    paths:
-      - ".github/workflows/build.yml"
-      - "src/**"
-      - "Cargo.*"
 
 jobs:
   build:
@@ -27,10 +22,13 @@ jobs:
         include:
           - os: ubuntu-latest
             run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openssl sqlite build-essential libmariadb-dev-compat libpq-dev libssl-dev pkgconf
+            toolchain: stable
             ext: ""
           - os: windows-latest
+            toolchain: stable
             ext: ".exe"
           - os: macos-latest
+            toolchain: stable
             ext: ""
 
     name: Building on ${{ matrix.os }}
@@ -49,11 +47,12 @@ jobs:
       - name: 'Install Rust toolchain for os: ${{ matrix.os }}'
         uses: actions-rs/toolchain@v1
         with:
+          toolchain: ${{ matrix.toolchain }}
           profile: minimal
       # End Uses the rust-toolchain file to determine version
 
       # Build the binary
-      - name: "`cargo build --release"
+      - name: "cargo build --release"
         uses: actions-rs/cargo@v1
         with:
           command: build

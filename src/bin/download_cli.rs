@@ -73,9 +73,8 @@ fn get_config_path() -> Result<PathBuf> {
 
 fn read_config(path: &Path) -> Result<PathBuf> {
     let config = fs::read(path).with_context(|| "读取用户配置失败")?;
-    let config: Config = serde_json::from_slice(&config).with_context(|| {
-        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
-    })?;
+    let config: Config = serde_json::from_slice(&config)
+        .with_context(|| "解析用户配置失败,请使用'-c'参数重置配置后重新运行")?;
     let path = PathBuf::from(config.save_path);
     Ok(path)
 }
@@ -87,9 +86,8 @@ fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
         fs::create_dir_all(dir.as_path())?;
     }
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut config: Config = serde_json::from_slice(&config).with_context(|| {
-        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
-    })?;
+    let mut config: Config = serde_json::from_slice(&config)
+        .with_context(|| "解析用户配置失败,请使用'-c'参数重置配置后重新运行")?;
     config.save_path = path;
     let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
@@ -165,16 +163,18 @@ async fn main() -> Result<()> {
 
     if cli.login {
         handle_login(&cli).await?;
-        return Ok(());
     }
     if let Some(path) = cli.save_path {
         let confih_path = get_config_path()?;
         save_download_path(path, confih_path.as_path())?;
-        return Ok(());
     }
     if let Some(sid) = cli.sid {
         let path = get_config_path()?;
-        let mut user = UserSession::from()?;
+        let user = UserSession::from();
+        if user.is_err() {
+            return Err(anyhow!("没有登录,请使用'-l [-u <username>]'登录后使用"));
+        }
+        let mut user = user.unwrap();
         let save_path = read_config(path.as_path())?;
         run(sid, &mut user, &save_path).await?;
         user.save()?;

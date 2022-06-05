@@ -22,5 +22,8 @@ indicatif = "0.16.2"
 rpassword = "6.0"
 keyring = "1.1.2"
 
+zip = "0.6.2"
+walkdir = "2.3.2"
+
 [profile.release]
 strip = true

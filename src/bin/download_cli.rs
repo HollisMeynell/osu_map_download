@@ -6,7 +6,7 @@ use clap::Parser;
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 
-use osu_map_download::util::{do_home, do_login, download, download_no_video, UserSession};
+use osu_map_download::util::{do_home, do_login, download, UserSession};
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -39,11 +39,8 @@ async fn run(sid: u64, user: &mut UserSession, path: &PathBuf, video: bool) -> R
     }
     println!("正在下载...");
 
-    if video {
-        download(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
-    } else {
-        download_no_video(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
-    }
+    let d_path = path.join(&format!(r"{}.osz", sid));
+    download(sid, user, &d_path, video).await?;
 
     println!("下载完成");
     Ok(())

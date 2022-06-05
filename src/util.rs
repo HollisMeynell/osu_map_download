@@ -20,12 +20,12 @@ static LOGIN_URL: &str = "https://osu.ppy.sh/session";
 
 // This can be embed into normal function called
 #[inline]
-fn new_download_set_no_video_url(sid: u64) -> String {
-    format!("https://osu.ppy.sh/beatmapsets/{sid}/download?noVideo=1")
-}
-#[inline]
-fn new_download_set_url(sid: u64) -> String {
-    format!("https://osu.ppy.sh/beatmapsets/{sid}/download")
+fn new_download_set_url(sid: u64, download_video: bool) -> String {
+    let mut url = format!("https://osu.ppy.sh/beatmapsets/{sid}/download");
+    if !download_video {
+        url.push_str("?noVideo=1");
+    }
+    url
 }
 
 lazy_static! {
@@ -276,40 +276,13 @@ pub async fn do_login(user: &mut UserSession) -> Result<()> {
 /// 下载方法,使用 UserSession 信息下载
 /// 如果短时间大量下载,尽可能使用不同的user下载
 /// 使用Tokio以及reqwest依赖,确保版本匹配
-pub async fn download_no_video(
+pub async fn download(
     sid: u64,
     user: &mut UserSession,
     download_file_path: &Path,
+    download_video: bool,
 ) -> Result<()> {
-    let url = new_download_set_no_video_url(sid);
-    let sid = sid.to_string();
-    let header = get_download_header(&sid, user);
-    // 尝试使用已保存的session信息直接下载
-    let data = response_for_download(&url, header).await?;
-    if data.status() == StatusCode::OK {
-        return download_file(data, download_file_path, &sid).await;
-    }
-    // session 可能超时失效 ,进行刷新
-    println!("刷新中");
-    do_home(user).await?;
-    let header = get_download_header(&sid, user);
-    let data = response_for_download(&url, header).await?;
-    if data.status() == StatusCode::OK {
-        return download_file(data, download_file_path, &sid).await;
-    }
-    // 重新登录
-    println!("重新登录");
-    do_login(user).await?;
-    let header = get_download_header(&sid, user);
-    let data = response_for_download(&url, header).await?;
-    if data.status() == StatusCode::OK {
-        return download_file(data, download_file_path, &sid).await;
-    }
-    // 登录失败抛出错误
-    Err(OsuMapDownloadError::LoginFail.into())
-}
-pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Path) -> Result<()> {
-    let url = new_download_set_url(sid);
+    let url = new_download_set_url(sid, download_video);
     let sid = sid.to_string();
     let header = get_download_header(&sid, user);
     // 尝试使用已保存的session信息直接下载

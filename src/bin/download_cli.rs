@@ -6,7 +6,7 @@ use clap::Parser;
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 
-use osu_map_download::util::{do_home, do_login, download, UserSession};
+use osu_map_download::util::{do_home, do_login, download, download_no_video, UserSession};
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]
@@ -16,7 +16,7 @@ use osu_map_download::util::{do_home, do_login, download, UserSession};
 struct Cli {
     #[clap(help = "输入下载谱面的sid")]
     sid: Option<u64>,
-    #[clap(short, help = "登录")]
+    #[clap(short, help = "登录选项")]
     login: bool,
     #[clap(short, long, help = "用户名", allow_hyphen_values = true)]
     user: Option<String>,
@@ -24,6 +24,8 @@ struct Cli {
     clear: bool,
     #[clap(short, long, help = "保存路径,默认程序所在位置")]
     save_path: Option<String>,
+    #[clap(short, help = "下载包含视频的文件,默认不包含")]
+    video: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,12 +33,17 @@ struct Config {
     save_path: String,
 }
 
-async fn run(sid: u64, user: &mut UserSession, path: &PathBuf) -> Result<()> {
+async fn run(sid: u64, user: &mut UserSession, path: &PathBuf, video: bool) -> Result<()> {
     if !path.is_dir() {
         return Err(anyhow!("\"{:?}\"路径不存在", path));
     }
     println!("正在下载...");
-    download(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
+
+    if video {
+        download(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
+    } else {
+        download_no_video(sid, user, path.join(&format!(r"{}.osz", sid)).as_path()).await?;
+    }
 
     println!("下载完成");
     Ok(())
@@ -181,7 +188,7 @@ async fn main() -> Result<()> {
         }
         let mut user = user.unwrap();
         let save_path = read_config(path.as_path())?;
-        run(sid, &mut user, &save_path).await?;
+        run(sid, &mut user, &save_path, cli.video).await?;
         user.save()?;
     }
     Ok(())

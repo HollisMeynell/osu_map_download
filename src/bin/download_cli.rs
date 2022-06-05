@@ -80,10 +80,15 @@ fn read_config(path: &Path) -> Result<PathBuf> {
 }
 
 fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
-    let dir = fs::read_link(&path)?;
+    let mut dir = fs::canonicalize(&path);
+    if dir.is_err() {
+        println!("{:?}文件夹不存在,正在创建...", &path);
+        fs::create_dir_all(&path)?;
+        dir = fs::canonicalize(&path);
+    }
+    let dir = dir.unwrap();
     if !dir.is_dir() {
-        println!("{:?}文件夹不存在,正在创建...", dir);
-        fs::create_dir_all(dir.as_path())?;
+        return Err(anyhow!("无法使用该路径!"));
     }
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
     let mut config: Config = serde_json::from_slice(&config)

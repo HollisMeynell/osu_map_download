@@ -1,12 +1,10 @@
+use crate::client::DownloadClient;
+use crate::error::OsuMapDownloadError;
 use anyhow::{Context, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
-use reqwest::{
-    header::{HeaderMap, CONTENT_TYPE, COOKIE},
-    Response,
-};
+use reqwest::header::{HeaderMap, CONTENT_TYPE, COOKIE};
 use std::collections::HashMap;
-use crate::error::OsuMapDownloadError;
 
 lazy_static! {
     static ref REG_XSRF: Regex = Regex::new(r"XSRF-TOKEN=([\w\d]+);").unwrap();
@@ -15,45 +13,6 @@ lazy_static! {
 
 const HOME_PAGE_URL: &str = "https://osu.ppy.sh/home";
 static LOGIN_URL: &str = "https://osu.ppy.sh/session";
-
-#[derive(Debug)]
-struct DownloadClient {
-    c: reqwest::Client,
-}
-
-impl DownloadClient {
-    fn new() -> Self {
-        Self {
-            c: reqwest::Client::new(),
-        }
-    }
-
-    async fn get(&self, url: &str, headers: HeaderMap) -> Result<Response> {
-        Ok(self
-            .c
-            .get(url)
-            .headers(headers)
-            .send()
-            .await
-            .with_context(|| format!("Fail to get response from url: {url}"))?)
-    }
-
-    async fn post(
-        &self,
-        url: &str,
-        headers: HeaderMap,
-        body: HashMap<String, &String>,
-    ) -> Result<Response> {
-        Ok(self
-            .c
-            .post(url)
-            .headers(headers)
-            .form(&body)
-            .send()
-            .await
-            .with_context(|| format!("Fail to post request to url: {url}"))?)
-    }
-}
 
 /// 用户信息记录,包含密码,登录后的session
 /// 包含的session信息可重用,请重用此结构
@@ -74,13 +33,23 @@ fn new_cookie(xsrf: &str, cookie: &str) -> String {
 
 impl UserSession {
     /// 通过账号密码生产记录
-    pub async fn new<T: Into<String>, U: Into<String>>(username: T, password: U) -> Result<Self> {
+    pub async fn new<T: Into<String>, U: Into<String>>(
+        username: T,
+        password: U,
+        client: Option<DownloadClient>,
+    ) -> Result<Self> {
+        let client = if let Some(client) = client {
+            client
+        } else {
+            DownloadClient::new()
+        };
+
         let mut session = UserSession {
             name: username.into(),
             password: password.into(),
             token: String::new(),
             session: String::new(),
-            client: DownloadClient::new(),
+            client,
         };
 
         session.refresh().await?;

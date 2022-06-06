@@ -16,11 +16,20 @@ lazy_static! {
 }
 
 /// 封装的下载请求
-async fn try_download(sid: &str, user: &UserSession, path: &Path) -> Result<()> {
+async fn try_download(
+    sid: &str,
+    user: &UserSession,
+    path: &Path,
+) -> Result<(), OsuMapDownloadError> {
     let url = format!("https://osu.ppy.sh/beatmapsets/{sid}/download?noVideo=1");
     let headers = user.new_header(&sid);
 
-    let response = CLIENT.get(url).headers(headers).send().await?;
+    let response = CLIENT
+        .get(url)
+        .headers(headers)
+        .send()
+        .await
+        .map_err(|_| OsuMapDownloadError::DownloadRequestError)?;
 
     if response.status() == StatusCode::NOT_FOUND {
         return Err(OsuMapDownloadError::NotFoundMapError.into());
@@ -41,10 +50,13 @@ pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Pat
 
     let res = try_download(&sid, user, download_file_path).await;
 
-    // FIXME: We should distinguish error before retry. There are some error indicate that there is
-    // no need to retry.
-    if res.is_ok() {
-        return Ok(())
+    // match response. If return is Ok, we return ok.
+    // If return is download request error, we refresh cookie and retry download
+    // If return is other error, return error String.
+    match res {
+        Ok(_) => return Ok(()),
+        Err(e) if e == OsuMapDownloadError::DownloadRequestError => (),
+        Err(e) => anyhow::bail!("{}", e),
     }
 
     // session 可能超时失效 ,进行刷新
@@ -57,10 +69,14 @@ pub async fn download(sid: u64, user: &mut UserSession, download_file_path: &Pat
     Err(OsuMapDownloadError::LoginFailError.into())
 }
 
-async fn download_file(resp: Response, write_to: &Path, sid: &str) -> Result<()> {
+async fn download_file(
+    resp: Response,
+    write_to: &Path,
+    sid: &str,
+) -> Result<(), OsuMapDownloadError> {
     let total_size = resp
         .content_length()
-        .ok_or_else(|| anyhow::anyhow!("无法获取文件大小"))?;
+        .ok_or_else(|| OsuMapDownloadError::UnknownSizeError)?;
 
     let filename = write_to.file_name().unwrap().to_str().unwrap();
     let bar = ProgressBar::new(total_size);
@@ -68,15 +84,25 @@ async fn download_file(resp: Response, write_to: &Path, sid: &str) -> Result<()>
         .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
         .progress_chars("#>-"));
     bar.set_message(format!("正在下载谱面 {sid}"));
-    let mut file = File::create(write_to).await?;
+    let mut file =
+        File::create(write_to)
+            .await
+            .map_err(|e| OsuMapDownloadError::TargetFileCreationError {
+                path: filename.to_string(),
+                error: e.to_string(),
+            })?;
     let mut downloaded = 0;
     let mut resp_stream = resp.bytes_stream();
 
     while let Some(chunk) = resp_stream.next().await {
-        let chunk = chunk?;
+        let chunk = chunk.map_err(|_| OsuMapDownloadError::DownloadPartError)?;
         file.write_all(&chunk)
             .await
-            .with_context(|| "下载文件时出现错误")?;
+            .with_context(|| "下载文件时出现错误")
+            .map_err(|e| OsuMapDownloadError::TargetFileWriteError {
+                path: filename.to_string(),
+                error: e.to_string(),
+            })?;
         let new = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
         downloaded = new;
         bar.set_position(new);

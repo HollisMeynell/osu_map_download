@@ -125,9 +125,9 @@ impl UserSession {
         }
     }
 
-    /// 保存当前session
-    pub fn save_session(&mut self) -> String {
-        format!("{}&{}", self.token, self.session)
+    /// 将当前的 cookie 和 token 信息转换成可供保存的字符串。
+    pub fn to_recoverable(&mut self) -> String {
+        format!("{}-{}", self.token, self.session)
     }
 
     /// 通过保存的session数据恢复

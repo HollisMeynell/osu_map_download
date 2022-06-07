@@ -10,12 +10,12 @@ lazy_static! {
 
 /// A wrapper function for sending HTTP GET request with given headers
 pub async fn get(url: &str, headers: HeaderMap) -> Result<Response> {
-    Ok(CLIENT
+    CLIENT
         .get(url)
         .headers(headers)
         .send()
         .await
-        .with_context(|| format!("Fail to get response from url: {url}"))?)
+        .with_context(|| format!("Fail to get response from url: {url}"))
 }
 
 /// A wrapper function for sending HTTP POST request with given headers and form
@@ -24,11 +24,11 @@ pub async fn post(
     headers: HeaderMap,
     form: &HashMap<String, &String>,
 ) -> Result<Response> {
-    Ok(CLIENT
+    CLIENT
         .post(url)
         .headers(headers)
         .form(form)
         .send()
         .await
-        .with_context(|| format!("Fail to post request to url: {url}"))?)
+        .with_context(|| format!("Fail to post request to url: {url}"))
 }

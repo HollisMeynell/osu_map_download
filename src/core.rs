@@ -29,7 +29,7 @@ async fn try_download(
                     "https://osu.ppy.sh/beatmapsets/{s}/download?noVideo={}",
                     if no_video { "" } else { "1" }
                 ),
-                user.new_header(&s),
+                user.new_header(s),
             )
         })
         .collect();
@@ -62,7 +62,7 @@ async fn try_download(
 
                 if resp.status() == StatusCode::OK {
                     write_task.push(tokio::spawn(async move {
-                        write_file(resp, path.to_path_buf(), sid)
+                        write_file(resp, path.to_path_buf(), sid).await
                     }));
                 }
             }
@@ -114,7 +114,7 @@ async fn write_file(
 ) -> Result<(), OsuMapDownloadError> {
     let total_size = resp
         .content_length()
-        .ok_or_else(|| OsuMapDownloadError::UnknownSizeError)?;
+        .ok_or(OsuMapDownloadError::UnknownSizeError)?;
 
     prefix.push(format!("{sid}.osz"));
     let path = prefix.to_str().expect("非法路径名").to_string();

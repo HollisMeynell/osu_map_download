@@ -116,7 +116,7 @@ async fn write_file(
         .content_length()
         .ok_or_else(|| OsuMapDownloadError::UnknownSizeError)?;
 
-    prefix.push(format!("{sid}.zip"));
+    prefix.push(format!("{sid}.osz"));
     let path = prefix.to_str().expect("非法路径名").to_string();
     let bar = ProgressBar::new(total_size);
     bar.set_style(ProgressStyle::default_bar()

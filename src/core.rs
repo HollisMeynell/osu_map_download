@@ -4,18 +4,13 @@ use crate::user::UserSession;
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use lazy_static::lazy_static;
 use reqwest::header::HeaderMap;
 use reqwest::{Response, StatusCode};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
-use crate::client::DownloadClient;
+use crate::client;
 use crate::error::OsuMapDownloadError;
-
-lazy_static! {
-    static ref CLIENT: DownloadClient = DownloadClient::new();
-}
 
 /// 封装的下载请求
 async fn try_download(
@@ -45,8 +40,7 @@ async fn try_download(
         let t = tokio::spawn(async move {
             (
                 sid.clone(),
-                CLIENT
-                    .get(&url, headers.clone())
+                client::get(&url, headers.clone())
                     .await
                     .map_err(|_| OsuMapDownloadError::DownloadRequestError),
             )

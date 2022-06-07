@@ -1,4 +1,4 @@
-use crate::client::DownloadClient;
+use crate::client;
 use crate::error::OsuMapDownloadError;
 use anyhow::{Context, Result};
 use lazy_static::lazy_static;
@@ -22,7 +22,6 @@ pub struct UserSession {
     password: String,
     token: String,
     session: String,
-    client: DownloadClient,
 }
 
 /// 生成请求用到的cookie字符串
@@ -33,23 +32,12 @@ fn new_cookie(xsrf: &str, cookie: &str) -> String {
 
 impl UserSession {
     /// 通过账号密码生产记录
-    pub async fn new<T: Into<String>, U: Into<String>>(
-        username: T,
-        password: U,
-        client: Option<DownloadClient>,
-    ) -> Result<Self> {
-        let client = if let Some(client) = client {
-            client
-        } else {
-            DownloadClient::new()
-        };
-
+    pub async fn new<T: Into<String>, U: Into<String>>(username: T, password: U) -> Result<Self> {
         let mut session = UserSession {
             name: username.into(),
             password: password.into(),
             token: String::new(),
             session: String::new(),
-            client,
         };
 
         session.refresh().await?;
@@ -72,9 +60,7 @@ impl UserSession {
             "cookie",
             new_cookie(&self.token, &self.session).parse().unwrap(),
         );
-        let response = self
-            .client
-            .get(HOME_PAGE_URL, header)
+        let response = client::get(HOME_PAGE_URL, header)
             .await
             .with_context(|| "请求主页失败")?;
 
@@ -123,9 +109,7 @@ impl UserSession {
         body.insert("selfname".to_string(), &self.name);
         body.insert("password".to_string(), &self.password);
 
-        let response = self
-            .client
-            .post(LOGIN_URL, header, body)
+        let response = client::post(LOGIN_URL, header, &body)
             .await
             .with_context(|| "登录请求无回复")?;
 

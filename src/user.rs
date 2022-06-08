@@ -127,21 +127,18 @@ impl UserSession {
 
     /// 将当前的 cookie 和 token 信息转换成可供保存的字符串。
     pub fn to_recoverable(&mut self) -> String {
-        format!("{}-{}", self.token, self.session)
+        format!("{},{}", self.token, self.session)
     }
 
     /// 通过保存的session数据恢复
-    pub fn read_session(&mut self, data: &str) {
-        let reg = Regex::new(r"([\w\d]+)&([\w\d%]+)").unwrap();
-
-        if let Some(s) = reg.captures(data) {
-            if let Some(m) = s.get(1) {
-                self.token = m.as_str().to_string();
-            }
-            if let Some(m) = s.get(2) {
-                self.session = m.as_str().to_string();
-            }
+    pub fn from_recoverable(&mut self, data: &str) {
+        let parts: Vec<&str> = data.split(",").collect();
+        if parts.len() < 2 {
+            eprintln!("非法的 session 数据，请清理重试");
+            return;
         }
+        self.token = parts[0].to_string();
+        self.session = parts[1].to_string();
     }
 
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留

@@ -1,6 +1,8 @@
-mod pswd;
+/// Enable pswd-store features to store user password.
+#[cfg(feature = "pswd-store")]
+mod pswd_store;
 
-use std::fs;
+use std::{fs, path};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -32,6 +34,7 @@ struct Cli {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
+    username: String,
     session: String,
     save_path: String,
 }
@@ -54,18 +57,20 @@ async fn run(sid: Vec<String>, user: &mut UserSession, path: &PathBuf, no_video:
 /// windows:$HOME\AppData\Roaming\OsuMapDownloader\config.json
 /// linux:$HOME/.config/OsuMapDownloader\config.json
 /// macos:$HOME/Library/Application Support/OsuMapDownloader\config.json
-fn get_or_new_config_path() -> Result<PathBuf> {
+fn new_config() -> Result<PathBuf> {
     let basedir = BaseDirs::new().ok_or_else(|| anyhow::anyhow!("找不到你的系统配置目录"))?;
 
     let dir = basedir.config_dir().join("OsuMapDownloader");
 
     if !dir.is_dir() {
-        fs::create_dir_all(dir.as_path())?;
+        println!("找不到配置文件目录，正在新建...");
+        fs::create_dir_all(dir.as_path()).with_context(|| "无法创建配置文件目录")?;
     }
 
     let config_path = dir.join("config.json");
 
     if !config_path.is_file() {
+        println!("找不到配置文件，正在新建...");
         fs::File::create(config_path.as_path()).with_context(|| "无法创建配置文件")?;
     }
 
@@ -132,7 +137,7 @@ async fn try_login(mut username: Option<String>) -> Result<UserSession> {
 async fn main() -> Result<()> {
     let cli: Cli = Cli::parse();
     if cli.clear {
-        let mut path = get_or_new_config_path()?;
+        let mut path = new_config()?;
         // 清除配置文件
         fs::remove_file(path.as_path())?;
         // 移除目录
@@ -142,13 +147,15 @@ async fn main() -> Result<()> {
         println!("清理完毕!");
     }
 
+    let config_path = new_config()?;
+
     if cli.login {
         try_login(cli.user).await?;
         return Ok(());
     }
 
     if let Some(path) = cli.save_path {
-        let config_path = get_or_new_config_path()?;
+        let config_path = new_config()?;
         save_download_path(path, config_path.as_path())?;
         return Ok(());
     }
@@ -157,7 +164,7 @@ async fn main() -> Result<()> {
         anyhow::bail!("请指定谱面 sid，使用 -h 选项来获取更多信息")
     }
 
-    let config_path = get_or_new_config_path()?;
+    let config_path = new_config()?;
     let config = read_config(config_path.as_path());
     let (mut user, save_to) = if let Ok(config) = config {
         (

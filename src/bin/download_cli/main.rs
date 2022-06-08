@@ -1,3 +1,5 @@
+mod pswd;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -24,8 +26,8 @@ struct Cli {
     clear: bool,
     #[clap(short, long, help = "保存路径，默认当前目录")]
     save_path: Option<String>,
-    #[clap(short, help = "不下载包含视频的文件，默认不下载视频", default_value_t = true)]
-    no_video: bool,
+    #[clap(short, help = "不下载包含视频的文件，默认不下载视频")]
+    video: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -165,7 +167,7 @@ async fn main() -> Result<()> {
     } else {
         (try_login(None).await?, PathBuf::new())
     };
-    run(cli.sid, &mut user, &save_to, cli.no_video).await?;
+    run(cli.sid, &mut user, &save_to, cli.video).await?;
     save_user_cookie(&mut user, config_path.as_path())?;
     Ok(())
 }

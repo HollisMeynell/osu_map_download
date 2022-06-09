@@ -33,19 +33,10 @@ struct Cli {
 }
 
 /// Data for storing user's username, reusable cookie data and default download path.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct Config {
     username: String,
     download_path: String,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            username: String::new(),
-            download_path: String::new(),
-        }
-    }
 }
 
 async fn run(
@@ -183,7 +174,7 @@ async fn main() -> Result<()> {
     }
 
     if cli.login {
-        let user = try_login(&cli.user.unwrap_or_else(|| prompt_up_for_username())).await?;
+        let user = try_login(&cli.user.unwrap_or_else(prompt_up_for_username)).await?;
         save_cookie(&user)?;
         return Ok(());
     }

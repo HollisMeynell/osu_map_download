@@ -2,7 +2,7 @@
 #[cfg(feature = "pswd-store")]
 mod pswd_store;
 
-use std::{fs, path};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -40,7 +40,12 @@ struct Config {
     download_path: String,
 }
 
-async fn run(sid: Vec<String>, user: &mut UserSession, path: &PathBuf, no_video: bool) -> Result<()> {
+async fn run(
+    sid: Vec<String>,
+    user: &mut UserSession,
+    path: &PathBuf,
+    no_video: bool,
+) -> Result<()> {
     if !path.is_dir() {
         return Err(anyhow!("\"{:?}\"路径不存在", path));
     }
@@ -86,14 +91,15 @@ fn read_config(path: &Path) -> Result<Config> {
     Ok(config)
 }
 
-fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<()> {
-    let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut config: Config = serde_json::from_slice(&config).with_context(|| {
-        "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
-    })?;
-    config.headers = user.to_recoverable();
+fn save_config(user: &UserSession, download_path: &Path) -> Result<()> {
+    let config = Config {
+        username: user.username().to_string(),
+        headers: user.to_recoverable(),
+        download_path: download_path.to_str().expect("非法的保存路径").to_string(),
+    };
     let config_str = serde_json::to_string(&config)?;
-    fs::write(user_config_path, config_str.as_bytes())?;
+    let config_path = new_config()?;
+    fs::write(config_path, config_str.as_bytes()).with_context(|| "写入配置文件时出错")?;
     Ok(())
 }
 
@@ -151,8 +157,8 @@ async fn main() -> Result<()> {
     let config_path = new_config()?;
 
     if cli.login {
-        let user = try_login(cli.user).await?;
-        save_user_cookie(&mut user, &config_path)?;
+        let mut user = try_login(cli.user).await?;
+        save_config(&mut user, &config_path)?;
         return Ok(());
     }
 
@@ -165,15 +171,19 @@ async fn main() -> Result<()> {
     }
 
     let config = read_config(config_path.as_path());
+    // if config is valid, we recover the user session from previous data
     let (mut user, save_to) = if let Ok(config) = config {
         (
-            UserSession::new(&config.username, &config.password).await?,
+            UserSession::from_recoverable(&config.headers)
+                .ok_or_else(|| anyhow::anyhow!("非法的登录数据，请使用 -l 参数重新登录"))?,
             Path::new(&config.download_path).to_path_buf(),
         )
     } else {
+        // if config is invalid, try to prompt up a login process for user
         (try_login(None).await?, PathBuf::new())
     };
+
     run(cli.sid, &mut user, &save_to, cli.video).await?;
-    save_user_cookie(&mut user, config_path.as_path())?;
+    save_config(&mut user, &save_to)?;
     Ok(())
 }

@@ -126,19 +126,27 @@ impl UserSession {
     }
 
     /// 将当前的 cookie 和 token 信息转换成可供保存的字符串。
-    pub fn to_recoverable(&mut self) -> String {
+    pub fn to_recoverable(&self) -> String {
         format!("{},{}", self.token, self.session)
     }
 
     /// 通过保存的session数据恢复
-    pub fn from_recoverable(&mut self, data: &str) {
-        let parts: Vec<&str> = data.split(",").collect();
+    pub fn from_recoverable(username: &str, data: &str) -> Option<UserSession> {
+        let parts: Vec<&str> = data.split(',').collect();
         if parts.len() < 2 {
-            eprintln!("非法的 session 数据，请清理重试");
-            return;
+            return None;
         }
-        self.token = parts[0].to_string();
-        self.session = parts[1].to_string();
+        Some(UserSession {
+            name: username.to_string(),
+            password: String::new(),
+            token: parts[0].to_string(),
+            session: parts[1].to_string(),
+        })
+    }
+
+    /// Get immutable reference to inner name
+    pub fn username(&self) -> &str {
+        &self.name
     }
 
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留

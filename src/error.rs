@@ -14,15 +14,9 @@ pub enum OsuMapDownloadError {
     #[error("文件大小未知，可能出现网络问题")]
     UnknownSizeError,
     #[error("无法创建下载文件路径：{path:?}，错误：{error:?}")]
-    TargetFileCreationError {
-        path: String,
-        error: String,
-    },
+    TargetFileCreationError { path: String, error: String },
     #[error("无法写入下载文件：{path:?}，错误：{error:?}")]
-    TargetFileWriteError {
-        path: String,
-        error: String,
-    },
+    TargetFileWriteError { path: String, error: String },
     #[error("网络出错，文件下载中断")]
     DownloadPartError,
     #[error("其他异常")]

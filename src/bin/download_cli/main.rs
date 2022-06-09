@@ -20,7 +20,7 @@ use osu_map_download::prelude::*;
 struct Cli {
     #[clap(help = "输入下载谱面的sid，可以用空格隔开输入多个")]
     sid: Vec<String>,
-    #[clap(short, help = "进入登录模式")]
+    #[clap(short, help = "进入登录模式，只更新 cookie 信息，不下载歌曲")]
     login: bool,
     #[clap(short, long, help = "用户名", allow_hyphen_values = true)]
     user: Option<String>,
@@ -32,11 +32,12 @@ struct Cli {
     video: bool,
 }
 
+/// Data for storing user's username, reusable cookie data and default download path.
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
     username: String,
-    session: String,
-    save_path: String,
+    headers: String,
+    download_path: String,
 }
 
 async fn run(sid: Vec<String>, user: &mut UserSession, path: &PathBuf, no_video: bool) -> Result<()> {
@@ -90,7 +91,7 @@ fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<(
     let mut config: Config = serde_json::from_slice(&config).with_context(|| {
         "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
     })?;
-    config.session = user.to_recoverable();
+    config.headers = user.to_recoverable();
     let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     Ok(())
@@ -110,7 +111,7 @@ fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
     let mut config: Config = serde_json::from_slice(&config)
         .with_context(|| "解析用户配置失败,请使用'-c'参数重置配置后重新运行")?;
-    config.save_path = path;
+    config.download_path = path;
     let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     println!("设置完毕!");
@@ -150,26 +151,24 @@ async fn main() -> Result<()> {
     let config_path = new_config()?;
 
     if cli.login {
-        try_login(cli.user).await?;
+        let user = try_login(cli.user).await?;
+        save_user_cookie(&mut user, &config_path)?;
         return Ok(());
     }
 
     if let Some(path) = cli.save_path {
-        let config_path = new_config()?;
         save_download_path(path, config_path.as_path())?;
-        return Ok(());
     }
 
     if cli.sid.is_empty() {
         anyhow::bail!("请指定谱面 sid，使用 -h 选项来获取更多信息")
     }
 
-    let config_path = new_config()?;
     let config = read_config(config_path.as_path());
     let (mut user, save_to) = if let Ok(config) = config {
         (
             UserSession::new(&config.username, &config.password).await?,
-            Path::new(&config.save_path).to_path_buf(),
+            Path::new(&config.download_path).to_path_buf(),
         )
     } else {
         (try_login(None).await?, PathBuf::new())

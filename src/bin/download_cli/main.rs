@@ -36,7 +36,6 @@ struct Cli {
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
     username: String,
-    headers: String,
     download_path: String,
 }
 
@@ -63,7 +62,7 @@ async fn run(
 /// windows:$HOME\AppData\Roaming\OsuMapDownloader\config.json
 /// linux:$HOME/.config/OsuMapDownloader\config.json
 /// macos:$HOME/Library/Application Support/OsuMapDownloader\config.json
-fn new_config() -> Result<PathBuf> {
+fn find_or_new_cfg_path() -> Result<PathBuf> {
     let basedir = BaseDirs::new().ok_or_else(|| anyhow::anyhow!("找不到你的系统配置目录"))?;
 
     let dir = basedir.config_dir().join("OsuMapDownloader");
@@ -94,13 +93,52 @@ fn read_config(path: &Path) -> Result<Config> {
 fn save_config(user: &UserSession, download_path: &Path) -> Result<()> {
     let config = Config {
         username: user.username().to_string(),
-        headers: user.to_recoverable(),
         download_path: download_path.to_str().expect("非法的保存路径").to_string(),
     };
     let config_str = serde_json::to_string(&config)?;
-    let config_path = new_config()?;
+    let config_path = find_or_new_cfg_path()?;
     fs::write(config_path, config_str.as_bytes()).with_context(|| "写入配置文件时出错")?;
     Ok(())
+}
+
+// save recoverable data into cache directory
+fn save_cookie(user: &UserSession) -> Result<()> {
+    let basedir = BaseDirs::new().unwrap();
+    let cache_dir = basedir.cache_dir();
+
+    let cache_dir = cache_dir.join("osu-map-downloader");
+    if !cache_dir.is_dir() {
+        fs::create_dir(&cache_dir).with_context(|| "创建缓存文件夹时出错")?;
+    }
+
+    let cache_file = cache_dir.join("user-session");
+    fs::write(cache_file, user.to_recoverable()).with_context(|| "写入用户缓存时出错")?;
+
+    Ok(())
+}
+
+// get session from cache directory
+fn load_cookie() -> Option<String> {
+    let basedir = BaseDirs::new().unwrap();
+    let cache_dir = basedir.cache_dir();
+    let cache_dir = cache_dir.join("osu-map-downloader");
+    if !cache_dir.is_dir() {
+        return None;
+    }
+    let cache_file = cache_dir.join("user-session");
+    fs::read_to_string(cache_file).ok()
+}
+
+// Do rm -rf for $CACHE_DIR/osu_map_download/
+fn clean_cookie() -> Result<()> {
+    let basedir = BaseDirs::new().unwrap();
+    let cache_dir = basedir.cache_dir();
+    let cache_dir = cache_dir.join("osu-map-downloader");
+    if !cache_dir.is_dir() {
+        return Ok(());
+    }
+
+    Ok(fs::remove_dir_all(cache_dir)?)
 }
 
 fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
@@ -143,47 +181,73 @@ async fn try_login(mut username: Option<String>) -> Result<UserSession> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli: Cli = Cli::parse();
+
+    let config_path = find_or_new_cfg_path()?;
+
     if cli.clear {
-        let mut path = new_config()?;
+        let mut config_path = config_path.clone();
         // 清除配置文件
-        fs::remove_file(path.as_path())?;
+        fs::remove_file(&config_path)?;
         // 移除目录
-        if path.pop() {
-            fs::remove_dir(path.as_path())?;
+        if config_path.pop() {
+            fs::remove_dir(config_path)?;
         }
+
+        // clean sessions
+        clean_cookie()?;
         println!("清理完毕!");
-    }
-
-    let config_path = new_config()?;
-
-    if cli.login {
-        let mut user = try_login(cli.user).await?;
-        save_config(&mut user, &config_path)?;
         return Ok(());
     }
 
-    if let Some(path) = cli.save_path {
-        save_download_path(path, config_path.as_path())?;
+    if cli.login {
+        let user = try_login(cli.user).await?;
+        // FIXME: we should use download path here
+        save_cookie(&user)?;
+        return Ok(());
     }
 
     if cli.sid.is_empty() {
         anyhow::bail!("请指定谱面 sid，使用 -h 选项来获取更多信息")
     }
 
-    let config = read_config(config_path.as_path());
-    // if config is valid, we recover the user session from previous data
-    let (mut user, save_to) = if let Ok(config) = config {
-        (
-            UserSession::from_recoverable(&config.headers)
-                .ok_or_else(|| anyhow::anyhow!("非法的登录数据，请使用 -l 参数重新登录"))?,
-            Path::new(&config.download_path).to_path_buf(),
-        )
-    } else {
+    let config = read_config(&config_path);
+
+    let recover_data = load_cookie();
+    // if no previous session, handle login
+    if recover_data.is_none() {
+        let (mut session, download_to) = match config {
+            // if config is valid, we recover the user session from previous data
+            Ok(cfg) => (
+                try_login(Some(cfg.username)).await?,
+                Path::new(&cfg.download_path).to_path_buf(),
+            ),
+            // if config is invalid, try to prompt up a login process for user
+            Err(_) => (try_login(None).await?, PathBuf::new()),
+        };
+
+        run(cli.sid, &mut session, &download_to, cli.video).await?;
+        save_cookie(&session)?;
+        return Ok(());
+    }
+
+    let recover_data = recover_data.unwrap();
+    let (mut session, download_to) = match config {
+        // if config is valid, we recover the user session from previous data
+        Ok(cfg) => (
+            UserSession::from_recoverable(&cfg.username, &recover_data)
+                .ok_or_else(|| anyhow::anyhow!("非法的 session 数据，请使用 -c 参数清理重试"))?,
+            Path::new(&cfg.download_path).to_path_buf(),
+        ),
         // if config is invalid, try to prompt up a login process for user
-        (try_login(None).await?, PathBuf::new())
+        Err(_) => (try_login(None).await?, PathBuf::new()),
     };
 
-    run(cli.sid, &mut user, &save_to, cli.video).await?;
-    save_config(&mut user, &save_to)?;
+    run(cli.sid, &mut session, &download_to, cli.video).await?;
+    save_cookie(&session)?;
+
+    if let Some(path) = cli.save_path {
+        save_download_path(path, config_path.as_path())?;
+    }
+
     Ok(())
 }

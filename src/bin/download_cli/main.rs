@@ -39,6 +39,15 @@ struct Config {
     download_path: String,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            username: String::new(),
+            download_path: String::new(),
+        }
+    }
+}
+
 async fn run(
     sid: Vec<String>,
     user: &mut UserSession,
@@ -90,12 +99,8 @@ fn read_config(path: &Path) -> Result<Config> {
     Ok(config)
 }
 
-fn save_config(user: &UserSession, download_path: &Path) -> Result<()> {
-    let config = Config {
-        username: user.username().to_string(),
-        download_path: download_path.to_str().expect("非法的保存路径").to_string(),
-    };
-    let config_str = serde_json::to_string(&config)?;
+fn save_config(cfg: &Config) -> Result<()> {
+    let config_str = serde_json::to_string(cfg)?;
     let config_path = find_or_new_cfg_path()?;
     fs::write(config_path, config_str.as_bytes()).with_context(|| "写入配置文件时出错")?;
     Ok(())
@@ -141,41 +146,19 @@ fn clean_cookie() -> Result<()> {
     Ok(fs::remove_dir_all(cache_dir)?)
 }
 
-fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
-    let mut dir = fs::canonicalize(&path);
-    if dir.is_err() {
-        println!("{:?}文件夹不存在,正在创建...", &path);
-        fs::create_dir_all(&path)?;
-        dir = fs::canonicalize(&path);
-    }
-    let dir = dir.unwrap();
-    if !dir.is_dir() {
-        return Err(anyhow!("无法使用该路径!"));
-    }
-    let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
-    let mut config: Config = serde_json::from_slice(&config)
-        .with_context(|| "解析用户配置失败,请使用'-c'参数重置配置后重新运行")?;
-    config.download_path = path;
-    let config_str = serde_json::to_string(&config)?;
-    fs::write(user_config_path, config_str.as_bytes())?;
-    println!("设置完毕!");
-    Ok(())
-}
-
-async fn try_login(mut username: Option<String>) -> Result<UserSession> {
-    if username.is_none() {
-        println!("输入你的 osu 用户名: ");
-        let mut buffer = String::new();
-        std::io::stdin().read_line(&mut buffer)?;
-        let buffer = buffer.trim().to_string();
-        username.replace(buffer);
-    }
-
-    // we have handle None case at above, it is safe to invoke unwrap here
-    let username = username.unwrap();
+async fn try_login(username: &String) -> Result<UserSession> {
     let password = rpassword::prompt_password(format!("请输入 {username} 的密码: "))?;
 
-    UserSession::new(&username, &password).await
+    UserSession::new(username, &password).await
+}
+
+fn prompt_up_for_username() -> String {
+    println!("没有用户名，请输入你的 osu 用户名: ");
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_line(&mut buffer)
+        .expect("非法的用户名输入，请重试");
+    buffer.trim().to_string()
 }
 
 #[tokio::main]
@@ -200,8 +183,7 @@ async fn main() -> Result<()> {
     }
 
     if cli.login {
-        let user = try_login(cli.user).await?;
-        // FIXME: we should use download path here
+        let user = try_login(&cli.user.unwrap_or_else(|| prompt_up_for_username())).await?;
         save_cookie(&user)?;
         return Ok(());
     }
@@ -210,44 +192,35 @@ async fn main() -> Result<()> {
         anyhow::bail!("请指定谱面 sid，使用 -h 选项来获取更多信息")
     }
 
-    let config = read_config(&config_path);
-
-    let recover_data = load_cookie();
-    // if no previous session, handle login
-    if recover_data.is_none() {
-        let (mut session, download_to) = match config {
-            // if config is valid, we recover the user session from previous data
-            Ok(cfg) => (
-                try_login(Some(cfg.username)).await?,
-                Path::new(&cfg.download_path).to_path_buf(),
-            ),
-            // if config is invalid, try to prompt up a login process for user
-            Err(_) => (try_login(None).await?, PathBuf::new()),
-        };
-
-        run(cli.sid, &mut session, &download_to, cli.video).await?;
-        save_cookie(&session)?;
-        return Ok(());
-    }
-
-    let recover_data = recover_data.unwrap();
-    let (mut session, download_to) = match config {
-        // if config is valid, we recover the user session from previous data
-        Ok(cfg) => (
-            UserSession::from_recoverable(&cfg.username, &recover_data)
-                .ok_or_else(|| anyhow::anyhow!("非法的 session 数据，请使用 -c 参数清理重试"))?,
-            Path::new(&cfg.download_path).to_path_buf(),
-        ),
-        // if config is invalid, try to prompt up a login process for user
-        Err(_) => (try_login(None).await?, PathBuf::new()),
-    };
-
-    run(cli.sid, &mut session, &download_to, cli.video).await?;
-    save_cookie(&session)?;
+    let mut config = read_config(&config_path).unwrap_or_default();
+    let mut is_cfg_updated = false;
 
     if let Some(path) = cli.save_path {
-        save_download_path(path, config_path.as_path())?;
+        config.download_path = path;
+        is_cfg_updated = true;
     }
+
+    if config.username.is_empty() {
+        config.username = prompt_up_for_username();
+        is_cfg_updated = true;
+    }
+
+    if is_cfg_updated {
+        save_config(&config)?;
+    }
+
+    let recover_data = load_cookie();
+    let download_path = PathBuf::from(config.download_path);
+    // if no previous session, handle login
+    let mut session = if let Some(data) = recover_data {
+        UserSession::from_recoverable(&config.username, &data)
+            .ok_or_else(|| anyhow::anyhow!("非法的 session 数据，请使用 -c 参数清理重试"))?
+    } else {
+        try_login(&config.username).await?
+    };
+
+    run(cli.sid, &mut session, &download_path, cli.video).await?;
+    save_cookie(&session)?;
 
     Ok(())
 }

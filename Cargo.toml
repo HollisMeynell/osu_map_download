@@ -21,7 +21,7 @@ futures-util = "0.3.21"
 indicatif = "0.16.2"
 rpassword = "6.0"
 
-zip = "0.6.2"
+zip = { version = "0.6.2", optional = true}
 walkdir = "2.3.2"
 
 keyring = { version = "1.1.2", optional = true }
@@ -31,3 +31,4 @@ strip = true
 
 [features]
 pswd-store = ["dep:keyring"]
+unzip = ["dep:zip"]

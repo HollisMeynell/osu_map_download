@@ -1,6 +1,7 @@
 mod client;
 mod core;
 mod error;
+#[cfg(feature="unzip")]
 mod unzip;
 mod user;
 

@@ -1,3 +1,4 @@
 /target
 /.idea
 /osu_map_download.iml
+.rust-analyzer.json

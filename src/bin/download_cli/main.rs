@@ -1,4 +1,8 @@
-use std::fs;
+/// Enable pswd-store features to store user password.
+#[cfg(feature = "pswd-store")]
+mod pswd_store;
+
+use std::{fs, path};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -16,7 +20,7 @@ use osu_map_download::prelude::*;
 struct Cli {
     #[clap(help = "输入下载谱面的sid，可以用空格隔开输入多个")]
     sid: Vec<String>,
-    #[clap(short, help = "进入登录模式")]
+    #[clap(short, help = "进入登录模式，只更新 cookie 信息，不下载歌曲")]
     login: bool,
     #[clap(short, long, help = "用户名", allow_hyphen_values = true)]
     user: Option<String>,
@@ -24,14 +28,16 @@ struct Cli {
     clear: bool,
     #[clap(short, long, help = "保存路径，默认当前目录")]
     save_path: Option<String>,
-    #[clap(short, help = "不下载包含视频的文件，默认不下载视频", default_value_t = true)]
-    no_video: bool,
+    #[clap(short, help = "不下载包含视频的文件，默认不下载视频")]
+    video: bool,
 }
 
+/// Data for storing user's username, reusable cookie data and default download path.
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
-    session: String,
-    save_path: String,
+    username: String,
+    headers: String,
+    download_path: String,
 }
 
 async fn run(sid: Vec<String>, user: &mut UserSession, path: &PathBuf, no_video: bool) -> Result<()> {
@@ -52,18 +58,20 @@ async fn run(sid: Vec<String>, user: &mut UserSession, path: &PathBuf, no_video:
 /// windows:$HOME\AppData\Roaming\OsuMapDownloader\config.json
 /// linux:$HOME/.config/OsuMapDownloader\config.json
 /// macos:$HOME/Library/Application Support/OsuMapDownloader\config.json
-fn get_or_new_config_path() -> Result<PathBuf> {
+fn new_config() -> Result<PathBuf> {
     let basedir = BaseDirs::new().ok_or_else(|| anyhow::anyhow!("找不到你的系统配置目录"))?;
 
     let dir = basedir.config_dir().join("OsuMapDownloader");
 
     if !dir.is_dir() {
-        fs::create_dir_all(dir.as_path())?;
+        println!("找不到配置文件目录，正在新建...");
+        fs::create_dir_all(dir.as_path()).with_context(|| "无法创建配置文件目录")?;
     }
 
     let config_path = dir.join("config.json");
 
     if !config_path.is_file() {
+        println!("找不到配置文件，正在新建...");
         fs::File::create(config_path.as_path()).with_context(|| "无法创建配置文件")?;
     }
 
@@ -83,7 +91,7 @@ fn save_user_cookie(user: &mut UserSession, user_config_path: &Path) -> Result<(
     let mut config: Config = serde_json::from_slice(&config).with_context(|| {
         "解析用户配置失败,请使用'-l'参数登录,或者请加'-c'参数重置配置后重新运行"
     })?;
-    config.session = user.to_recoverable();
+    config.headers = user.to_recoverable();
     let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     Ok(())
@@ -103,7 +111,7 @@ fn save_download_path(path: String, user_config_path: &Path) -> Result<()> {
     let config = fs::read(user_config_path).with_context(|| "读取用户配置失败")?;
     let mut config: Config = serde_json::from_slice(&config)
         .with_context(|| "解析用户配置失败,请使用'-c'参数重置配置后重新运行")?;
-    config.save_path = path;
+    config.download_path = path;
     let config_str = serde_json::to_string(&config)?;
     fs::write(user_config_path, config_str.as_bytes())?;
     println!("设置完毕!");
@@ -130,7 +138,7 @@ async fn try_login(mut username: Option<String>) -> Result<UserSession> {
 async fn main() -> Result<()> {
     let cli: Cli = Cli::parse();
     if cli.clear {
-        let mut path = get_or_new_config_path()?;
+        let mut path = new_config()?;
         // 清除配置文件
         fs::remove_file(path.as_path())?;
         // 移除目录
@@ -140,32 +148,32 @@ async fn main() -> Result<()> {
         println!("清理完毕!");
     }
 
+    let config_path = new_config()?;
+
     if cli.login {
-        try_login(cli.user).await?;
+        let user = try_login(cli.user).await?;
+        save_user_cookie(&mut user, &config_path)?;
         return Ok(());
     }
 
     if let Some(path) = cli.save_path {
-        let config_path = get_or_new_config_path()?;
         save_download_path(path, config_path.as_path())?;
-        return Ok(());
     }
 
     if cli.sid.is_empty() {
         anyhow::bail!("请指定谱面 sid，使用 -h 选项来获取更多信息")
     }
 
-    let config_path = get_or_new_config_path()?;
     let config = read_config(config_path.as_path());
     let (mut user, save_to) = if let Ok(config) = config {
         (
             UserSession::new(&config.username, &config.password).await?,
-            Path::new(&config.save_path).to_path_buf(),
+            Path::new(&config.download_path).to_path_buf(),
         )
     } else {
         (try_login(None).await?, PathBuf::new())
     };
-    run(cli.sid, &mut user, &save_to, cli.no_video).await?;
+    run(cli.sid, &mut user, &save_to, cli.video).await?;
     save_user_cookie(&mut user, config_path.as_path())?;
     Ok(())
 }

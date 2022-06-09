@@ -3,7 +3,6 @@ use std::{fs, io};
 
 use anyhow::Result;
 
-///
 /// 解压zip文件,.osz实际上是zip封装的压缩包
 pub fn unzip(zip_path: &Path, path: PathBuf) -> Result<()> {
     let zip_file = std::fs::File::open(zip_path)?;

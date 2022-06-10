@@ -2,6 +2,12 @@
 name = "osurs"
 version = "0.1.0"
 edition = "2021"
+authors = ["HollisMeynell", "Avimitin"]
+license = "MIT"
+description = "An open source utilities library for interact with osu"
+repository = "https://github.com/HollisMeynell/osu_map_download"
+readme = "README.md"
+keywords = ["osu"]
 
 [lib]
 name = "osurs"

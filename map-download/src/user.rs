@@ -7,8 +7,8 @@ use reqwest::header::{HeaderMap, CONTENT_TYPE, COOKIE};
 use std::collections::HashMap;
 
 lazy_static! {
-    static ref REG_XSRF: Regex = Regex::new(r"XSRF-TOKEN=([\w\d]+);").unwrap();
-    static ref REG_COOKIE: Regex = Regex::new(r"osu_session=([\w\d%]+);").unwrap();
+    static ref REG_XSRF: Regex = Regex::new(r"XSRF-TOKEN=([\w]+);").unwrap();
+    static ref REG_COOKIE: Regex = Regex::new(r"osu_session=([\w%]+);").unwrap();
 }
 
 const HOME_PAGE_URL: &str = "https://osu.ppy.sh/home";
@@ -211,4 +211,30 @@ fn test_user_from_recoverable() {
     // test invalid
     let user = UserSession::from_recoverable("abc", "def");
     assert_eq!(user, None);
+}
+
+#[test]
+fn test_user_update_header() {
+    let mut user = UserSession::from_recoverable("foo", "bar,123").unwrap();
+    let mut headers = HeaderMap::new();
+    use reqwest::header::HeaderValue;
+    headers.insert(
+        "set-cookie",
+        HeaderValue::from_str("XSRF-TOKEN=abcdef12345;").unwrap(),
+    );
+    headers.append(
+        "set-cookie",
+        HeaderValue::from_str("osu_session=ghijklm78901;").unwrap(),
+    );
+
+    user.update(&headers);
+    assert_eq!(
+        user,
+        UserSession {
+            name: String::from("foo"),
+            password: String::new(),
+            session: String::from("ghijklm78901"),
+            token: String::from("abcdef12345"),
+        }
+    )
 }

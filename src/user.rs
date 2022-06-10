@@ -17,6 +17,7 @@ static LOGIN_URL: &str = "https://osu.ppy.sh/session";
 /// 用户信息记录,包含密码,登录后的session
 /// 包含的session信息可重用,请重用此结构
 /// 可以将session保存出来
+#[derive(Debug, Default, PartialEq)]
 pub struct UserSession {
     name: String,
     password: String,
@@ -189,4 +190,25 @@ impl UserSession {
             }
         }
     }
+}
+
+#[test]
+fn test_user_from_recoverable() {
+    // test valid
+    let user = UserSession::from_recoverable("abc", "def,123");
+    assert_eq!(
+        user,
+        Some(UserSession {
+            name: String::from("abc"),
+            password: String::new(),
+            token: String::from("def"),
+            session: String::from("123")
+        })
+    );
+    let user = user.unwrap();
+    assert_eq!(user.to_recoverable(), "def,123");
+
+    // test invalid
+    let user = UserSession::from_recoverable("abc", "def");
+    assert_eq!(user, None);
 }

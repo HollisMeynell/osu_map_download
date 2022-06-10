@@ -10,7 +10,7 @@ use clap::Parser;
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 
-use osu_map_download::prelude::*;
+use osurs::map_download::prelude::*;
 
 #[derive(Debug, Parser)]
 #[clap(name = "osu beatmap downloader")]

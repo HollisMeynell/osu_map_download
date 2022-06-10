@@ -3,7 +3,7 @@ name = "osurs-map-download"
 version = "0.1.0"
 edition = "2021"
 authors = ["Avimitin <avimitin@gmail.com>", "HollisMeynell"]
-descriptions = "Library for downloading osu map"
+description = "Library for downloading osu map"
 repository = "https://github.com/HollisMeynell/osu_map_download"
 license = "MIT"
 

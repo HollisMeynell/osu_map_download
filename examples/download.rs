@@ -1,4 +1,4 @@
-use osu_map_download::prelude::*;
+use osurs::map_download::prelude::*;
 use std::path::Path;
 
 #[tokio::main]

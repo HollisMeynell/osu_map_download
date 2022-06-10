@@ -238,3 +238,22 @@ fn test_user_update_header() {
         }
     )
 }
+
+#[test]
+fn test_user_new_header() {
+    let user = UserSession::from_recoverable("foo", "bar,123").unwrap();
+    let header = user.new_header("12345");
+    let mut expect = HeaderMap::new();
+    expect.insert(COOKIE, new_cookie("bar", "123").parse().unwrap());
+    expect.insert(
+        "referer",
+        format!("https://osu.ppy.sh/beatmapsets/12345")
+            .parse()
+            .unwrap(),
+    );
+    expect.insert(
+        CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_static("application/x-www-form-urlencoded"),
+    );
+    assert_eq!(header, expect);
+}

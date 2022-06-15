@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::user::UserSession;
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::header::HeaderMap;
-use reqwest::{Response, StatusCode};
+use reqwest::{Client, Response, StatusCode};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
@@ -29,7 +29,7 @@ async fn try_download(
                     "https://osu.ppy.sh/beatmapsets/{s}/download?noVideo={}",
                     if no_video { "" } else { "1" }
                 ),
-                user.new_header(s),
+                user.new_header(&format!("https://osu.ppy.sh/beatmapsets/{s}")),
             )
         })
         .collect();
@@ -149,4 +149,43 @@ async fn write_file(
 
     bar.finish_with_message(format!("谱面下载完成，保存到: {path}"));
     Ok(())
+}
+
+/// 通过访问 https://osu.ppy.sh/b/{bid} 接口跳转到标准链接来获取sid,并更新cookie
+/// 暂时没有使用
+#[warn(dead_code)]
+pub async fn bid_to_sid(bid: u32, user:&mut UserSession) -> Result<u32,Error> {
+    let header = user.new_header("");
+    let rep = client::get(&format!("https://osu.ppy.sh/b/{bid}"), header).await?;
+
+    user.update(rep.headers());
+
+    let nurl = rep.url().to_string();
+    let sid = nurl
+        .split_at(nurl.find("#").unwrap()).0
+        .split_at(31).1
+        .to_string()
+        .parse::<u32>().unwrap();
+    Ok(sid)
+}
+#[tokio::test]
+async fn test_bid_to_sid(){
+    let client = Client::new();
+
+    let rep = client
+        .get("https://osu.ppy.sh/b/3594765")
+        .send()
+        .await
+        .unwrap();
+
+    let nurl = rep
+        .url()
+        .to_string();
+    let sid = nurl
+        .split_at(nurl.find("#").unwrap()).0
+        .split_at(31).1
+        .to_string()
+        .parse::<u32>().unwrap();
+    // https://osu.ppy.sh/beatmapsets/1748483#osu/3594765
+    assert_eq!(1748483, sid);
 }

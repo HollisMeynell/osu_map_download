@@ -77,13 +77,13 @@ impl UserSession {
         }
     }
 
-    pub fn new_header(&self, id: &str) -> HeaderMap {
+    pub fn new_header(&self, back_url: &str) -> HeaderMap {
         let mut header = HeaderMap::new();
         header.insert(
             COOKIE,
             new_cookie(&self.token, &self.session).parse().unwrap(),
         );
-        let back_url = format!("https://osu.ppy.sh/beatmapsets/{id}");
+
         header.insert("referer", back_url.parse().unwrap());
         header.insert(
             CONTENT_TYPE,
@@ -107,7 +107,7 @@ impl UserSession {
 
         let mut body = HashMap::new();
         body.insert("_token".to_string(), &self.token);
-        body.insert("selfname".to_string(), &self.name);
+        body.insert("username".to_string(), &self.name);
         body.insert("password".to_string(), &self.password);
 
         let response = client::post(LOGIN_URL, header, &body)
@@ -122,7 +122,10 @@ impl UserSession {
             reqwest::StatusCode::FORBIDDEN => {
                 Err(OsuMapDownloadError::IncorrectPasswordError.into())
             }
-            _ => Err(OsuMapDownloadError::Unknown.into()),
+            _ => {
+                println!("status:{}", response.status());
+                Err(OsuMapDownloadError::Unknown.into())
+            }
         }
     }
 
@@ -151,7 +154,7 @@ impl UserSession {
     }
 
     // 更新 token 和 session。如果传入的 HeaderMap 没有满足更新的值，旧的值会保留
-    fn update(&mut self, header_map: &HeaderMap) {
+    pub fn update(&mut self, header_map: &HeaderMap) {
         let all_headers = header_map.get_all("set-cookie");
         let mut xsrf_change = false;
         let mut cookie_change = false;
@@ -202,7 +205,7 @@ fn test_user_from_recoverable() {
             name: String::from("abc"),
             password: String::new(),
             token: String::from("def"),
-            session: String::from("123")
+            session: String::from("123"),
         })
     );
     let user = user.unwrap();

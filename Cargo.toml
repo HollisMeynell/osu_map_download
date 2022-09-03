@@ -35,7 +35,6 @@ rpassword = "7.0.0"
 
 keyring = { version = "1.1.2", optional = true }
 
-winreg = "0.10.0"
 osu-db = "0.3.0"
 [profile.release]
 strip = true

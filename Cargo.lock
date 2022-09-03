@@ -1229,7 +1229,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "winreg",
 ]
 
 [[package]]

@@ -7,12 +7,6 @@ use osu_db::collection::*;
 
 const REG_PATH: &str = "SOFTWARE\\Classes\\osu\\DefaultIcon";
 
-// fn get_osu_path() -> Result<String>{
-//     let hk = winreg::RegKey::predef(HKEY_LOCAL_MACHINE);
-//     let (tk, rd) = hk.create_subkey(REG_PATH)?;
-//     let path = tk.get_raw_value("")?;
-//     Ok(path.to_string())
-// }
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -97,8 +91,8 @@ fn get_username(text: &str) -> String {
     }
 }
 
-fn get_osu_path() -> String {
-    String::from("")
+fn get_osu_path() -> Result<String> {
+    Ok(String::from(""))
 }
 
 #[tokio::main]

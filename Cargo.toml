@@ -30,11 +30,13 @@ clap = { version = "3.1.18", features = [ "derive" ] }
 directories = "4.0.1"
 serde_json = "1.0.81"
 futures-util = "0.3.21"
-indicatif = "0.16.2"
-rpassword = "6.0"
+indicatif = "0.17.0"
+rpassword = "7.0.0"
 
 keyring = { version = "1.1.2", optional = true }
 
+winreg = "0.10.0"
+osu-db = "0.3.0"
 [profile.release]
 strip = true
 

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use directories::BaseDirs;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use osurs::map_download::prelude::*;
@@ -143,13 +144,25 @@ async fn try_login(username: &String) -> Result<UserSession> {
     UserSession::new(username, &password).await
 }
 
+fn check_username(name:&str) -> bool{
+    let regex = Regex::new(r#"^[\w _\-\[\]]+$"#).unwrap();
+    regex.captures(name).is_some()
+}
+
 fn prompt_up_for_username() -> String {
     println!("没有用户名，请输入你的 osu 用户名: ");
     let mut buffer = String::new();
-    std::io::stdin()
-        .read_line(&mut buffer)
-        .expect("非法的用户名输入，请重试");
-    buffer.trim().to_string()
+    loop {
+        std::io::stdin()
+            .read_line(&mut buffer)
+            .expect("非法的用户名输入，请重试");
+        let name = buffer.trim().to_string();
+        if check_username(&name) {
+            return name;
+        }
+        println!("用户名校验未通过,请确认是否正确");
+        buffer.clear();
+    }
 }
 
 #[tokio::main]

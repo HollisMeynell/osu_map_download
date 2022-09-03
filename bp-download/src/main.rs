@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
 
     let path = get_osu_path();
     if path.is_err() {
-        return Error(path.expect_err("未找到osu安装路径"));
+        return Err(Error::msg("未找到osu安装路径"));
     }
     let mut path = PathBuf::from(path.unwrap());
     path.push("songs");
@@ -137,14 +137,14 @@ async fn test_get_osu_id() {
 ///
 #[tokio::test]
 async fn test_get_bp_sid() -> Result<()> {
-    let mut sid = get_sid(2, Mode::Osu, 0).await?;
-    assert_eq!("3720", sid);
-    sid = get_sid(2, Mode::Taiko, 0).await?;
-    assert_eq!("380864", sid);
-    sid = get_sid(2, Mode::Catch, 0).await?;
-    assert_eq!("118", sid);
-    sid = get_sid(2, Mode::Mania, 0).await?;
-    assert_eq!("63089", sid);
+    let (sid,_) = get_sid(2, Mode::Osu, 0).await?;
+    assert_eq!("3720", &sid);
+    let (sid,_) = get_sid(2, Mode::Taiko, 0).await?;
+    assert_eq!("380864", &sid);
+    let (sid,_) = get_sid(2, Mode::Catch, 0).await?;
+    assert_eq!("118", &sid);
+    let (sid,_) = get_sid(2, Mode::Mania, 0).await?;
+    assert_eq!("63089", &sid);
 
     Ok(())
 }

@@ -1,0 +1,21 @@
+[package]
+name = "bp-download"
+version = "0.1.0"
+edition = "2021"
+authors = ["Avimitin <avimitin@gmail.com>", "HollisMeynell"]
+description = "download for bp"
+repository = "https://github.com/HollisMeynell/osu_map_download"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+osurs-map-download = { path = "../map-download"}
+reqwest = { version = "0.11.10", features = ["json", "gzip", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+regex = "1.5.6"
+anyhow = "1.0.57"
+osu-db = "0.3.0"
+[target.'cfg(windows)'.dependencies]
+winapi = "0.3.9"

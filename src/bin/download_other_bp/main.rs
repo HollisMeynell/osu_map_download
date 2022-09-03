@@ -78,20 +78,29 @@ fn get_username(text: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let username = get_username("请输入你自己的 osu 用户名: ");
-    let password = rpassword::prompt_password(format!("请输入 {username} 的密码: "))?;
-    println!("登陆中...");
-    let user = UserSession::new(username, &password).await?;
-
-    let other_name = get_username("输入获取谁的bp:");
-    println!("请输入模式数字(0:osu 1:taiko 2:catch 3:mania):");
-    let mut osu_mode = String::new();
-    std::io::stdin().read_line(&mut osu_mode).expect("输入错误");
-    let mode = Mode::press(&osu_mode);
-    let mut bid_list = vec![];
-    for index in 0..100 {
-        bid_list.push(get_sid(sid, mode, index).await?);
+    // let username = get_username("请输入你自己的 osu 用户名: ");
+    // let password = rpassword::prompt_password(format!("请输入 {username} 的密码: "))?;
+    // println!("登陆中...");
+    // let user = UserSession::new(username, &password).await?;
+    //
+    // let other_name = get_username("输入获取谁的bp:");
+    // println!("请输入模式数字(0:osu 1:taiko 2:catch 3:mania):");
+    // let mut osu_mode = String::new();
+    // std::io::stdin().read_line(&mut osu_mode).expect("输入错误");
+    // let mode = Mode::press(&osu_mode);
+    // let mut bid_list = vec![];
+    // for index in 0..100 {
+    //     bid_list.push(get_sid(sid, mode, index).await?);
+    // }
+    let path = get_osu_path();
+    if path.is_err() {
+        return Error(path.expect_err("未找到osu安装路径"));
     }
+    let path = path.unwrap();
+    {
+        println!("{}", &path);
+    }
+    //
     Ok(())
 }
 

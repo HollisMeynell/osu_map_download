@@ -1,4 +1,5 @@
 use std::fmt::format;
+use std::ops::Add;
 use std::path::{Path, PathBuf};
 use anyhow::*;
 use osurs_map_download::prelude::*;
@@ -92,7 +93,19 @@ fn get_username(text: &str) -> String {
 }
 
 fn get_osu_path() -> Result<String> {
+    //winapi::shared::minwindef::HKEY::HKEY_LOCAL_MACHINE
+    let regkey = winreg::RegKey::predef(HKEY_LOCAL_MACHINE);
+    let (key, disp) = regkey.create_subkey(REG_PATH)?;
+    let path = key.get_raw_value("")?
+        .to_string();
+    path.rfind("osu!.ext");
     Ok(String::from(""))
+}
+
+fn do_download(uid:i64, mode:Mode, index: i32) -> Result<String> {
+    let (sid, md5) = get_sid(uid, mode, index).await?;
+    download(&[sid], &mut user, path.as_path(), false).await?;
+    Ok(md5)
 }
 
 #[tokio::main]
@@ -102,7 +115,7 @@ async fn main() -> Result<()> {
     println!("登陆中...");
     let mut user = UserSession::new(username, &password).await?;
 
-    let other_name = get_username("输入获取谁的bp:");
+    let mut other_name = get_username("输入获取谁的bp(用户名):");
     let uid = get_osu_id(&other_name).await?;
     println!("请输入模式数字(0:osu 1:taiko 2:catch 3:mania):");
     let mut osu_mode = String::new();
@@ -116,14 +129,33 @@ async fn main() -> Result<()> {
     let mut path = PathBuf::from(path.unwrap());
     path.push("songs");
     let mut beatmap_hashes = vec![];
+    let mut error_list = vec![];
     for index in 0..100 {
-        let (sid, md5) = get_sid(uid, mode, index).await?;
-        download(&[sid], &mut user, path.as_path(), false).await?;
-        beatmap_hashes.push(Some(md5));
+        let d = do_download(uid, mode, index);
+        if d.is_err() {
+            error_list.push(index + 1);
+            continue;
+        }
+        beatmap_hashes.push(Some(d.unwrap()));
     }
     path.pop();
-
-
+    path.push("Collection.db");
+    other_name.push_str("'s bp");
+    let s = Collection{
+        name: Some(other_name),
+        beatmap_hashes
+    };
+    let mut collects = CollectionList::from_file(&path)?;
+    collects.collections.push(s);
+    collects.to_file(&path)?;
+    if !error_list.is_empty() {
+        print!("对方bp的");
+        for eid in error_list {
+            print!("第{eid}个,");
+        }
+        println!("因被下架所以无法下载");
+    }
+    println!("ok!");
     Ok(())
 }
 

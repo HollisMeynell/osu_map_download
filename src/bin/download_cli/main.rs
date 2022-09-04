@@ -144,7 +144,7 @@ async fn try_login(username: &String) -> Result<UserSession> {
     UserSession::new(username, &password).await
 }
 
-fn check_username(name:&str) -> bool{
+fn check_username(name: &str) -> bool {
     let regex = Regex::new(r#"^[\w _\-\[\]]+$"#).unwrap();
     regex.captures(name).is_some()
 }

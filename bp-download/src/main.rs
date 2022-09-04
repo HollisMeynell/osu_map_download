@@ -1,10 +1,11 @@
 use std::fmt::format;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
+
 use anyhow::*;
+use osu_db::collection::*;
 use osurs_map_download::prelude::*;
 use regex::Regex;
-use osu_db::collection::*;
 
 const REG_PATH: &str = "SOFTWARE\\Classes\\osu\\DefaultIcon";
 
@@ -55,10 +56,10 @@ async fn get_sid(uid: i64, osu_mode: Mode, index: i32) -> Result<(String, String
         .and_then(|cap| cap.name("sid"))
         .map(|d| d.as_str())
         .unwrap();
-    Ok((String::from(sid),String::from(data)))
+    Ok((String::from(sid), String::from(data)))
 }
 
-async fn get_osu_id(name:&str) -> Result<i64> {
+async fn get_osu_id(name: &str) -> Result<i64> {
     let get = reqwest::get(format!("https://osu.ppy.sh/users/{name}")).await?;
     let url = get.url().to_string();
     if let Some(mut d) = url.rfind("/") {
@@ -102,7 +103,7 @@ fn get_osu_path() -> Result<String> {
     Ok(String::from(""))
 }
 
-fn do_download(uid:i64, mode:Mode, index: i32) -> Result<String> {
+async fn do_download(uid: i64, mode: Mode, index: i32) -> Result<String> {
     let (sid, md5) = get_sid(uid, mode, index).await?;
     download(&[sid], &mut user, path.as_path(), false).await?;
     Ok(md5)
@@ -131,7 +132,7 @@ async fn main() -> Result<()> {
     let mut beatmap_hashes = vec![];
     let mut error_list = vec![];
     for index in 0..100 {
-        let d = do_download(uid, mode, index);
+        let d = do_download(uid, mode, index).await;
         if d.is_err() {
             error_list.push(index + 1);
             continue;
@@ -141,9 +142,9 @@ async fn main() -> Result<()> {
     path.pop();
     path.push("Collection.db");
     other_name.push_str("'s bp");
-    let s = Collection{
+    let s = Collection {
         name: Some(other_name),
-        beatmap_hashes
+        beatmap_hashes,
     };
     let mut collects = CollectionList::from_file(&path)?;
     collects.collections.push(s);
@@ -160,6 +161,15 @@ async fn main() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_get_path() -> Result<()> {
+    let a = get_osu_path();
+    assert!(a.is_ok());
+
+    println!("{}", &a.unwrap());
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_get_osu_id() {
     let id = get_osu_id("-Spring Night-").await.unwrap();
     assert_eq!(17064371, id);
@@ -169,13 +179,13 @@ async fn test_get_osu_id() {
 ///
 #[tokio::test]
 async fn test_get_bp_sid() -> Result<()> {
-    let (sid,_) = get_sid(2, Mode::Osu, 0).await?;
+    let (sid, _) = get_sid(2, Mode::Osu, 0).await?;
     assert_eq!("3720", &sid);
-    let (sid,_) = get_sid(2, Mode::Taiko, 0).await?;
+    let (sid, _) = get_sid(2, Mode::Taiko, 0).await?;
     assert_eq!("380864", &sid);
-    let (sid,_) = get_sid(2, Mode::Catch, 0).await?;
+    let (sid, _) = get_sid(2, Mode::Catch, 0).await?;
     assert_eq!("118", &sid);
-    let (sid,_) = get_sid(2, Mode::Mania, 0).await?;
+    let (sid, _) = get_sid(2, Mode::Mania, 0).await?;
     assert_eq!("63089", &sid);
 
     Ok(())
